@@ -2,7 +2,18 @@
   "name": "rz-gallery-media-api",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy", "typecheck": "tsc --noEmit" },
-  "dependencies": { "aws4fetch": "^1.0.20" },
-  "devDependencies": { "@cloudflare/workers-types": "4.20260515.1", "typescript": "5.9.3", "wrangler": "4.92.0" }
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20",
+    "client-zip": "^2.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260515.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.92.0"
+  }
 }

@@ -17,6 +17,7 @@ type Media = {
   filename: string;
 };
 type Gallery = {
+  slug: string;
   partnerOne: string;
   partnerTwo: string;
   location: string;
@@ -47,6 +48,14 @@ export default function CoupleGallery() {
       })
       .then(setGallery)
       .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    const onPopState = () => {
+      const next = window.location.hash.replace("#", "");
+      setView(next === "photos" || next === "films" ? next : "home");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
   useEffect(() => {
     if (activePhoto === null || !gallery) return;
@@ -86,14 +95,27 @@ export default function CoupleGallery() {
   const films = gallery.media.filter((m) => m.type === "video" && m.playbackId);
   const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
   const cover = photos[0]?.url;
+  const downloadUrl = (type: "all" | "photos" | "videos") =>
+    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}`;
+  const openView = (next: "photos" | "films") => {
+    window.history.pushState({ view: next }, "", `#${next}`);
+    setView(next);
+  };
+  const backHome = () => {
+    if (window.location.hash) window.history.back();
+    else setView("home");
+  };
   if (view === "photos")
     return (
       <main className="dynamic-photos">
-        <DynamicHeader names={names} back={() => setView("home")} />
+        <DynamicHeader names={names} back={backHome} />
         <section className="dynamic-heading">
           <small>A wedding in photographs</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
+          <a className="page-download-all" href={downloadUrl("photos")}>
+            Download all photos ↓
+          </a>
         </section>
         <section className="dynamic-photo-grid">
           {photos.map((photo, index) => (
@@ -184,11 +206,14 @@ export default function CoupleGallery() {
             : undefined
         }
       >
-        <DynamicHeader names={names} back={() => setView("home")} />
+        <DynamicHeader names={names} back={backHome} />
         <section className="dynamic-film-copy">
           <small>A wedding story</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
+          <a className="page-download-all" href={downloadUrl("videos")}>
+            Download all films ↓
+          </a>
         </section>
         <section className="dynamic-film-rail">
           {films.map((film, index) => (
@@ -251,12 +276,15 @@ export default function CoupleGallery() {
         </h1>
         <p>{gallery.note || gallery.location}</p>
         <div>
-          <button disabled={!photos.length} onClick={() => setView("photos")}>
+          <button disabled={!photos.length} onClick={() => openView("photos")}>
             Photography <b>↗</b>
           </button>
-          <button disabled={!films.length} onClick={() => setView("films")}>
+          <button disabled={!films.length} onClick={() => openView("films")}>
             Films <b>↗</b>
           </button>
+          <a className="home-download-all" href={downloadUrl("all")}>
+            Download all <b>↓</b>
+          </a>
         </div>
       </section>
     </main>

@@ -821,13 +821,23 @@ body:has(.dynamic-photos) {
   gap: 0.7rem;
   margin-top: 2rem;
 }
-.dynamic-home section button {
+.dynamic-home section button,
+.home-download-all {
   padding: 1rem 1.3rem;
   background: #f7f3ed;
   color: #17120e;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.57rem;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+.dynamic-home section button:hover,
+.home-download-all:hover {
+  transform: translateY(-2px);
+  background: #fff;
 }
 .dynamic-home section button:disabled {
   opacity: 0.35;
@@ -876,6 +886,34 @@ body:has(.dynamic-photos) {
 }
 .dynamic-heading p {
   color: #81776b;
+}
+.page-download-all {
+  display: inline-flex;
+  margin-top: 0.8rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #a99a88;
+  color: #30271f;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-size: 0.58rem;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+.page-download-all:hover {
+  transform: translateY(-2px);
+  background: #30271f;
+  color: #f7f3ed;
+}
+.dynamic-films .page-download-all {
+  border-color: rgba(255, 255, 255, 0.55);
+  color: white;
+}
+.dynamic-films .page-download-all:hover {
+  background: #f7f3ed;
+  color: #17120e;
 }
 .dynamic-photo-grid {
   padding: 0 3vw 6vw;

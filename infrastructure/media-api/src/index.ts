@@ -1,4 +1,5 @@
 import { AwsClient } from "aws4fetch";
+import { downloadZip } from "client-zip";
 
 interface Env {
   MEDIA: R2Bucket;
@@ -90,6 +91,44 @@ async function deleteR2Prefix(bucket: R2Bucket, prefix: string) {
       await bucket.delete(listed.objects.map(({ key }) => key));
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
+}
+async function galleryArchive(
+  env: Env,
+  gallery: Record<string, any>,
+  slug: string,
+  selection: "all" | "photos" | "videos",
+) {
+  const media = (gallery.media || []).filter(
+    (item: Record<string, any>) =>
+      item.originalKey?.startsWith(`couples/${slug}/`) &&
+      (selection === "all" ||
+        (selection === "photos" && item.type === "photo") ||
+        (selection === "videos" && item.type === "video")),
+  );
+  if (!media.length) return null;
+  async function* files() {
+    for (let index = 0; index < media.length; index++) {
+      const item = media[index],
+        object = await env.MEDIA.get(item.originalKey);
+      if (!object?.body) continue;
+      const folder = item.type === "photo" ? "Photos" : "Films";
+      yield {
+        name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
+        input: object.body,
+        lastModified: object.uploaded,
+      };
+    }
+  }
+  const archive = downloadZip(files()),
+    headers = new Headers(archive.headers),
+    suffix = selection === "all" ? "gallery" : selection;
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${slug}-${suffix}.zip"`,
+  );
+  headers.set("Access-Control-Allow-Origin", env.ALLOWED_ORIGIN);
+  headers.set("Cache-Control", "private,no-store");
+  return new Response(archive.body, { status: 200, headers });
 }
 
 export default {
@@ -204,6 +243,27 @@ export default {
           }),
         );
         return json(galleries.filter(Boolean), 200, origin);
+      }
+      const archiveMatch = url.pathname.match(
+        /^\/api\/galleries\/([^/]+)\/download$/,
+      );
+      if (archiveMatch && request.method === "GET") {
+        const slug = safeSlug(archiveMatch[1]),
+          selection = url.searchParams.get("type") || "all";
+        if (!["all", "photos", "videos"].includes(selection))
+          return json({ error: "Invalid download type" }, 400, origin);
+        const object = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!object) return json({ error: "Gallery not found" }, 404, origin);
+        const gallery = await object.json<Record<string, any>>();
+        if (!gallery.published)
+          return json({ error: "Gallery not found" }, 404, origin);
+        const archive = await galleryArchive(
+          env,
+          gallery,
+          slug,
+          selection as "all" | "photos" | "videos",
+        );
+        return archive || json({ error: "No files to download" }, 404, origin);
       }
       if (
         url.pathname.startsWith("/api/galleries/") &&
