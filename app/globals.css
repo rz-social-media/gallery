@@ -1280,7 +1280,25 @@ body:has(.dynamic-photos) {
   flex: 0 0 auto;
   position: relative;
   height: 100%;
-  background: #ddd;
+  overflow: hidden;
+  background: #ddd5ca;
+}
+.public-photo-tile:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(105deg, transparent 32%, rgba(255,255,255,.48) 48%, transparent 64%),
+    #ddd5ca;
+  background-size: 220% 100%;
+  animation: gallery-skeleton 1.35s ease-in-out infinite;
+  transition: opacity 420ms ease;
+  pointer-events: none;
+}
+.public-photo-tile:has(img[data-loaded="true"]):before {
+  opacity: 0;
+  animation: none;
 }
 .public-photo-tile > button {
   width: 100%;
@@ -1294,11 +1312,19 @@ body:has(.dynamic-photos) {
   height: 100%;
   display: block;
   object-fit: contain;
-  transition: transform 300ms ease, filter 300ms ease;
+  opacity: 0;
+  transition: opacity 480ms ease, transform 300ms ease, filter 300ms ease;
+}
+.public-photo-tile img[data-loaded="true"] {
+  opacity: 1;
 }
 .public-photo-tile:hover img {
   transform: scale(1.015);
   filter: brightness(0.88);
+}
+@keyframes gallery-skeleton {
+  from { background-position: 130% 0; }
+  to { background-position: -90% 0; }
 }
 .public-photo-tile > span {
   position: absolute;

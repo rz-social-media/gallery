@@ -594,6 +594,7 @@ function JustifiedPhotoGrid({
                   alt={photo.alt || `${names} photograph ${index + 1}`}
                   onLoad={(event) => {
                     const image = event.currentTarget;
+                    image.dataset.loaded = "true";
                     const nextRatio = image.naturalWidth / image.naturalHeight;
                     setRatios((currentRatios) =>
                       currentRatios[photo.id] === nextRatio
