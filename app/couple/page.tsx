@@ -175,10 +175,8 @@ export default function CoupleGallery() {
     return (
       <main className="dynamic-photos">
         <DynamicHeader names={names} back={backHome} />
-        <section className="dynamic-heading">
-          <small>A wedding in photographs</small>
-          <h1>{names}</h1>
-          <p>{gallery.location}</p>
+        <section className="photo-utility-bar" aria-label="Photography actions">
+          <span><Icon name="photo" /> Photography</span>
           <div className="photo-page-actions">
             <button
               className={selectionMode ? "is-active" : ""}
@@ -398,17 +396,29 @@ export default function CoupleGallery() {
           <small>A wedding story</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
-          <a
-            className="page-download-all"
-            href={downloadUrl("videos")}
-            onClick={(event) => adaptDownload(event, "videos")}
-          >
-            <Icon name="download" /> Download all films
-          </a>
         </section>
+        <a
+          className="page-download-all film-top-download"
+          href={downloadUrl("videos")}
+          onClick={(event) => adaptDownload(event, "videos")}
+        >
+          <Icon name="download" /> Download all films
+        </a>
         <section className="dynamic-film-rail">
           {films.map((film, index) => (
-            <article key={film.id}>
+            <article
+              key={film.id}
+              onMouseEnter={(event) => {
+                if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+                const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { play?: () => Promise<void> }) | null;
+                void player?.play?.().catch(() => undefined);
+              }}
+              onMouseLeave={(event) => {
+                const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { pause?: () => void; currentTime?: number }) | null;
+                player?.pause?.();
+                if (player) player.currentTime = 0;
+              }}
+            >
               <button onClick={() => setActiveFilm(index)}>
                 <img
                   src={
@@ -416,6 +426,15 @@ export default function CoupleGallery() {
                     `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
                   }
                   alt=""
+                />
+                <MuxPlayer
+                  className="film-hover-preview"
+                  playbackId={`${film.playbackId}?max_resolution=720p`}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  title={`${film.title || "Wedding film"} preview`}
                 />
                 <span>▶</span>
                 <strong>{film.title || "Wedding film"}</strong>
@@ -538,7 +557,8 @@ function JustifiedPhotoGrid({
     current.push({ photo, index, ratio });
     ratioSum += ratio;
     const height = (width - gap * (current.length - 1)) / ratioSum;
-    if (height <= targetHeight) {
+    const rhythm = width <= 700 ? 1 : [0.86, 1.12, 0.96][rows.length % 3];
+    if (height <= targetHeight * rhythm) {
       previousHeight = Math.max(135, height);
       rows.push({ height: previousHeight, items: current });
       current = [];

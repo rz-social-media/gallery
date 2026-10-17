@@ -289,10 +289,12 @@ async function galleryArchive(
   gallery: Record<string, any>,
   slug: string,
   selection: "all" | "photos" | "videos",
+  selectedIds?: Set<string>,
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
       item.originalKey?.startsWith(`couples/${slug}/`) &&
+      (!selectedIds?.size || selectedIds.has(String(item.id))) &&
       (selection === "all" ||
         (selection === "photos" && item.type === "photo") ||
         (selection === "videos" && item.type === "video")),
@@ -353,10 +355,12 @@ function mobileDownloadsPage(
   gallery: Record<string, any>,
   slug: string,
   selection: "all" | "photos" | "videos",
+  selectedIds?: Set<string>,
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
       item.originalKey?.startsWith(`couples/${slug}/`) &&
+      (!selectedIds?.size || selectedIds.has(String(item.id))) &&
       (selection === "all" ||
         (selection === "photos" && item.type === "photo") ||
         (selection === "videos" && item.type === "video")),
@@ -543,11 +547,15 @@ export default {
         const gallery = await object.json<Record<string, any>>();
         if (!gallery.published)
           return json({ error: "Gallery not found" }, 404, origin);
+        const selectedIds = new Set(
+          (url.searchParams.get("ids") || "").split(",").filter(Boolean).slice(0, 500),
+        );
         const archive = await galleryArchive(
           env,
           gallery,
           slug,
           selection as "all" | "photos" | "videos",
+          selectedIds,
         );
         return archive || json({ error: "No files to download" }, 404, origin);
       }
@@ -568,6 +576,9 @@ export default {
           gallery,
           slug,
           selection as "all" | "photos" | "videos",
+          new Set(
+            (url.searchParams.get("ids") || "").split(",").filter(Boolean).slice(0, 500),
+          ),
         );
       }
       if (
