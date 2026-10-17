@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
   BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -228,7 +228,12 @@ function Editor({
       state: string | null;
       percentage: number | null;
     }>({ state: null, percentage: null }),
+    [videoStates, setVideoStates] = useState<Record<string, string>>({}),
     [deleting, setDeleting] = useState(false);
+  const galleryRef = useRef(gallery);
+  useEffect(() => {
+    galleryRef.current = gallery;
+  }, [gallery]);
   useEffect(() => {
     if (!processingStartedAt) {
       setElapsedSeconds(0);
@@ -240,7 +245,83 @@ function Editor({
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [processingStartedAt]);
+  const pendingVideoIds = gallery.media
+    .filter((item) => item.type === "video" && item.assetId && !item.playbackId)
+    .map((item) => item.assetId)
+    .join(",");
+  useEffect(() => {
+    if (!gallery.slug || !pendingVideoIds) return;
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      const current = galleryRef.current;
+      const pending = current.media.filter(
+        (item) => item.type === "video" && item.assetId && !item.playbackId,
+      );
+      if (!pending.length) return;
+      try {
+        const results = await Promise.all(
+          pending.map(async (item) => {
+            const response = await fetch(`${API}/api/videos/${item.assetId}`, {
+              headers: { Authorization: `Bearer ${code}` },
+            });
+            if (!response.ok) throw new Error("Could not check film status");
+            return { item, state: await response.json() };
+          }),
+        );
+        if (stopped) return;
+        setVideoStates((previous) => ({
+          ...previous,
+          ...Object.fromEntries(
+            results.map(({ item, state }) => [
+              item.id,
+              state.progressState || state.status,
+            ]),
+          ),
+        }));
+        const ready = new Map(
+          results
+            .filter(({ state }) => state.playbackId)
+            .map(({ item, state }) => [item.id, state.playbackId]),
+        );
+        if (ready.size) {
+          const latest = galleryRef.current;
+          const updated = {
+            ...latest,
+            media: latest.media.map((item) =>
+              ready.has(item.id)
+                ? { ...item, playbackId: ready.get(item.id) }
+                : item,
+            ),
+          };
+          galleryRef.current = updated;
+          change(updated);
+          await persist(updated);
+        }
+        if (results.some(({ state }) => !state.playbackId))
+          timer = window.setTimeout(poll, 5000);
+      } catch {
+        if (!stopped) timer = window.setTimeout(poll, 10000);
+      }
+    };
+    poll();
+    return () => {
+      stopped = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [pendingVideoIds, gallery.slug, code]);
   const set = (k: keyof Gallery, v: any) => change({ ...gallery, [k]: v });
+  async function persist(value: Gallery) {
+    const response = await fetch(`${API}/api/galleries/${value.slug}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${code}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(value),
+    });
+    if (!response.ok) throw new Error("Could not save gallery progress");
+  }
   async function deleteGallery() {
     if (!gallery.slug) return;
     const names =
@@ -339,12 +420,15 @@ function Editor({
             originalKey,
             url: `${API}/media/${webKey}`,
           });
-          change({ ...gallery, slug, media: [...nextMedia] });
+          const updated = { ...galleryRef.current, slug, media: [...nextMedia] };
+          galleryRef.current = updated;
+          change(updated);
+          await persist(updated);
         } else if (file.type.startsWith("video/")) {
           const originalKey = await signed(file, file.name, "video", slug);
           setUploadStage("processing");
           setProcessingStartedAt(Date.now());
-          const created = await fetch(`${API}/api/videos`, {
+          const createdResponse = await fetch(`${API}/api/videos`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${code}`,
@@ -355,21 +439,10 @@ function Editor({
               title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
               coupleSlug: slug,
             }),
-          }).then((r) => r.json());
-          let state: any;
-          for (let i = 0; i < 60; i++) {
-            state = await fetch(`${API}/api/videos/${created.assetId}`, {
-              headers: { Authorization: `Bearer ${code}` },
-            }).then((r) => r.json());
-            setMuxProgress({
-              state: state.progressState,
-              percentage: state.progressPercentage,
-            });
-            if (state.status === "ready") break;
-            await new Promise((r) => setTimeout(r, 5000));
-          }
-          if (!state?.playbackId)
-            throw new Error("Mux processing did not finish");
+          });
+          const created = await createdResponse.json();
+          if (!createdResponse.ok)
+            throw new Error(created.error || "Could not start film processing");
           nextMedia.push({
             id: crypto.randomUUID(),
             type: "video",
@@ -378,9 +451,11 @@ function Editor({
             filename: file.name,
             originalKey,
             assetId: created.assetId,
-            playbackId: state.playbackId,
           });
-          change({ ...gallery, slug, media: [...nextMedia] });
+          const updated = { ...galleryRef.current, slug, media: [...nextMedia] };
+          galleryRef.current = updated;
+          change(updated);
+          await persist(updated);
         }
       } catch (e) {
         alert((e as Error).message);
@@ -463,7 +538,14 @@ function Editor({
                 multiple
                 type="file"
                 accept="image/*,video/*"
-                onChange={(e) => addFiles([...(e.target.files || [])])}
+                onClick={(e) => {
+                  e.currentTarget.value = "";
+                }}
+                onChange={(e) => {
+                  const files = [...(e.currentTarget.files || [])];
+                  e.currentTarget.value = "";
+                  if (files.length) void addFiles(files);
+                }}
               />
             </label>
           </div>
@@ -524,8 +606,20 @@ function Editor({
           {gallery.media
             .filter((x) => x.type === "video")
             .map((v) => (
-              <p className="film" key={v.id}>
-                ▶ {v.title}
+              <p
+                className={`film ${!v.playbackId ? "is-processing" : ""}`}
+                key={v.id}
+              >
+                {!v.playbackId && (
+                  <b className="processing-spinner" aria-hidden="true" />
+                )}
+                {v.playbackId ? "▶" : ""} {v.title}
+                {!v.playbackId && (
+                  <small>
+                    {formatMuxState(videoStates[v.id] || "preparing")} in the
+                    background · Safe to close this page
+                  </small>
+                )}
                 <button
                   onClick={() =>
                     set(

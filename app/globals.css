@@ -346,6 +346,28 @@ body:has(.gm-login) {
   border-top: 1px solid #ddd4c8;
   padding: 1rem 0;
 }
+.film.is-processing {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  column-gap: 0.7rem;
+}
+.film.is-processing .processing-spinner {
+  grid-row: 1 / span 2;
+  width: 22px;
+  height: 22px;
+}
+.film.is-processing small {
+  grid-column: 2;
+  margin-top: 0.2rem;
+  color: #756d64;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.film.is-processing button {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
 .film button {
   float: right;
 }
