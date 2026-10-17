@@ -120,6 +120,20 @@ export default function CoupleGallery() {
   } as CSSProperties;
   const downloadUrl = (type: "all" | "photos" | "videos") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}`;
+  const mobileDownloadUrl = (type: "all" | "photos" | "videos") =>
+    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}`;
+  const adaptDownload = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    type: "all" | "photos" | "videos",
+  ) => {
+    if (
+      window.matchMedia("(pointer: coarse)").matches ||
+      window.innerWidth <= 760
+    ) {
+      event.preventDefault();
+      window.location.href = mobileDownloadUrl(type);
+    }
+  };
   const openView = (next: "photos" | "films") => {
     window.history.pushState({ view: next }, "", `#${next}`);
     setView(next);
@@ -144,21 +158,19 @@ export default function CoupleGallery() {
           <small>A wedding in photographs</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
-          <a className="page-download-all" href={downloadUrl("photos")}>
+          <a
+            className="page-download-all"
+            href={downloadUrl("photos")}
+            onClick={(event) => adaptDownload(event, "photos")}
+          >
             Download all photos ↓
           </a>
         </section>
-        <section className="dynamic-photo-grid">
-          {photos.map((photo, index) => (
-            <button key={photo.id} onClick={() => setActivePhoto(index)}>
-              <img
-                src={photo.url!}
-                alt={photo.alt || `${names} photograph ${index + 1}`}
-              />
-              <span>{String(index + 1).padStart(2, "0")}</span>
-            </button>
-          ))}
-        </section>
+        <JustifiedPhotoGrid
+          photos={photos}
+          names={names}
+          openPhoto={setActivePhoto}
+        />
         {activePhoto !== null && (
           <div
             className="dynamic-lightbox"
@@ -252,7 +264,7 @@ export default function CoupleGallery() {
             </span>
             <a
               className="original-download"
-              href={`${API}/api/download?key=${encodeURIComponent(photos[activePhoto].originalKey)}`}
+              href={`${API}/api/download?key=${encodeURIComponent(photos[activePhoto].originalKey)}&name=${encodeURIComponent(photos[activePhoto].filename)}`}
             >
               Download original
             </a>
@@ -282,23 +294,37 @@ export default function CoupleGallery() {
           <small>A wedding story</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
-          <a className="page-download-all" href={downloadUrl("videos")}>
+          <a
+            className="page-download-all"
+            href={downloadUrl("videos")}
+            onClick={(event) => adaptDownload(event, "videos")}
+          >
             Download all films ↓
           </a>
         </section>
         <section className="dynamic-film-rail">
           {films.map((film, index) => (
-            <button key={film.id} onClick={() => setActiveFilm(index)}>
-              <img
-                src={
-                  film.posterUrl ||
-                  `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
-                }
-                alt=""
-              />
-              <span>▶</span>
-              <strong>{film.title || "Wedding film"}</strong>
-            </button>
+            <article key={film.id}>
+              <button onClick={() => setActiveFilm(index)}>
+                <img
+                  src={
+                    film.posterUrl ||
+                    `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
+                  }
+                  alt=""
+                />
+                <span>▶</span>
+                <strong>{film.title || "Wedding film"}</strong>
+              </button>
+              <a
+                className="media-card-download"
+                href={`${API}/api/download?key=${encodeURIComponent(film.originalKey)}&name=${encodeURIComponent(film.filename)}`}
+                aria-label={`Download ${film.title || film.filename}`}
+                title="Download film"
+              >
+                ↓
+              </a>
+            </article>
           ))}
         </section>
         {activeFilm !== null && (
@@ -318,7 +344,7 @@ export default function CoupleGallery() {
               />
               <a
                 className="video-download"
-                href={`${API}/api/download?key=${encodeURIComponent(films[activeFilm].originalKey)}`}
+                href={`${API}/api/download?key=${encodeURIComponent(films[activeFilm].originalKey)}&name=${encodeURIComponent(films[activeFilm].filename)}`}
               >
                 Download original film
               </a>
@@ -353,12 +379,104 @@ export default function CoupleGallery() {
           <button disabled={!films.length} onClick={() => openView("films")}>
             Films <b>↗</b>
           </button>
-          <a className="home-download-all" href={downloadUrl("all")}>
+          <a
+            className="home-download-all"
+            href={downloadUrl("all")}
+            onClick={(event) => adaptDownload(event, "all")}
+          >
             Download all <b>↓</b>
           </a>
         </div>
       </section>
     </main>
+  );
+}
+
+function JustifiedPhotoGrid({
+  photos,
+  names,
+  openPhoto,
+}: {
+  photos: Media[];
+  names: string;
+  openPhoto: (index: number) => void;
+}) {
+  const container = useRef<HTMLElement | null>(null);
+  const [width, setWidth] = useState(1200);
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!container.current) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(entry.contentRect.width),
+    );
+    observer.observe(container.current);
+    return () => observer.disconnect();
+  }, []);
+  const gap = width <= 700 ? 7 : 12;
+  const targetHeight = width <= 700 ? 190 : 290;
+  const rows: Array<{
+    height: number;
+    items: Array<{ photo: Media; index: number; ratio: number }>;
+  }> = [];
+  let current: Array<{ photo: Media; index: number; ratio: number }> = [];
+  let ratioSum = 0;
+  let previousHeight = targetHeight;
+  photos.forEach((photo, index) => {
+    const ratio = ratios[photo.id] || 1.45;
+    current.push({ photo, index, ratio });
+    ratioSum += ratio;
+    const height = (width - gap * (current.length - 1)) / ratioSum;
+    if (height <= targetHeight) {
+      previousHeight = Math.max(135, height);
+      rows.push({ height: previousHeight, items: current });
+      current = [];
+      ratioSum = 0;
+    }
+  });
+  if (current.length)
+    rows.push({
+      height: Math.min(previousHeight, targetHeight),
+      items: current,
+    });
+  return (
+    <section className="dynamic-photo-grid" ref={container}>
+      {rows.map((row, rowIndex) => (
+        <div className="justified-row" key={rowIndex} style={{ height: row.height }}>
+          {row.items.map(({ photo, index, ratio }) => (
+            <article
+              className="public-photo-tile"
+              key={photo.id}
+              style={{ width: row.height * ratio }}
+            >
+              <button onClick={() => openPhoto(index)}>
+                <img
+                  src={photo.url!}
+                  alt={photo.alt || `${names} photograph ${index + 1}`}
+                  onLoad={(event) => {
+                    const image = event.currentTarget;
+                    const nextRatio = image.naturalWidth / image.naturalHeight;
+                    setRatios((currentRatios) =>
+                      currentRatios[photo.id] === nextRatio
+                        ? currentRatios
+                        : { ...currentRatios, [photo.id]: nextRatio },
+                    );
+                  }}
+                />
+              </button>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <a
+                className="media-card-download"
+                href={`${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`}
+                aria-label={`Download ${photo.filename}`}
+                title="Download photo"
+              >
+                ↓
+              </a>
+            </article>
+          ))}
+        </div>
+      ))}
+    </section>
   );
 }
 function DynamicHeader({ names, back }: { names: string; back: () => void }) {

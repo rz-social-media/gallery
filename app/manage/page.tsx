@@ -51,6 +51,7 @@ export default function Manager() {
     [ready, setReady] = useState(false),
     [rows, setRows] = useState<Gallery[]>([]),
     [active, setActive] = useState<Gallery | null>(null),
+    [openMenu, setOpenMenu] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
@@ -149,6 +150,18 @@ export default function Manager() {
       alert((error as Error).message);
     }
   }
+  async function copyGalleryUrl(gallery: Gallery) {
+    if (!gallery.published) return;
+    const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setNotice("Gallery URL copied");
+      setOpenMenu(null);
+      window.setTimeout(() => setNotice(""), 2200);
+    } catch {
+      window.prompt("Copy gallery URL", shareUrl);
+    }
+  }
   if (!ready)
     return (
       <main className="gm-login">
@@ -221,7 +234,11 @@ export default function Manager() {
         </div>
         <div className="gm-grid">
           {rows.map((g) => {
-            const cover = g.media.find((x) => x.type === "photo");
+            const coverUrl =
+              g.computerCoverUrl ||
+              g.phoneCoverUrl ||
+              g.media.find((x) => x.type === "photo")?.url ||
+              g.media.find((x) => x.type === "video")?.posterUrl;
             return (
               <article className="gm-card" key={g.slug}>
                 <button
@@ -229,7 +246,7 @@ export default function Manager() {
                   onClick={() => setActive(g)}
                 >
                   <div>
-                    {cover?.url && <img src={cover.url} alt="" />}
+                    {coverUrl && <img src={coverUrl} alt="" />}
                     <span>{g.published ? "Live" : "Draft"}</span>
                   </div>
                   <h2>
@@ -237,19 +254,49 @@ export default function Manager() {
                   </h2>
                   <p>{g.location || "Location not added"}</p>
                 </button>
-                <button
-                  className="gm-card-delete"
-                  onClick={() => deleteFromDashboard(g)}
-                  aria-label={`Delete ${g.partnerOne} and ${g.partnerTwo}'s gallery`}
-                  title="Delete gallery"
-                >
-                  Delete
-                </button>
+                <div className="gm-card-menu">
+                  <button
+                    className="gm-card-menu-trigger"
+                    onClick={() =>
+                      setOpenMenu((current) =>
+                        current === g.slug ? null : g.slug,
+                      )
+                    }
+                    aria-label={`Actions for ${g.partnerOne} and ${g.partnerTwo}`}
+                    aria-expanded={openMenu === g.slug}
+                  >
+                    •••
+                  </button>
+                  {openMenu === g.slug && (
+                    <div className="gm-card-menu-popover">
+                      <button
+                        disabled={!g.published}
+                        onClick={() => void copyGalleryUrl(g)}
+                        title={g.published ? "Copy gallery URL" : "Publish the gallery first"}
+                      >
+                        <span aria-hidden="true">⧉</span> Copy URL
+                      </button>
+                      <button
+                        className="is-danger"
+                        onClick={() => {
+                          setOpenMenu(null);
+                          void deleteFromDashboard(g);
+                        }}
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                          <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                        </svg>
+                        Delete Gallery
+                      </button>
+                    </div>
+                  )}
+                </div>
               </article>
             );
           })}
         </div>
       </section>
+      {notice && <aside className="gm-dashboard-notice">{notice}</aside>}
     </main>
   );
 }
