@@ -1450,11 +1450,7 @@ body:has(.dynamic-photos) {
   top: 26%;
   z-index: 2;
 }
-.film-top-download {
-  position: absolute;
-  z-index: 5;
-  top: 92px;
-  right: 3vw;
+.header-download-all {
   margin: 0;
   background: rgba(12, 9, 7, .35);
   backdrop-filter: blur(12px);
@@ -1650,9 +1646,9 @@ body:has(.dynamic-photos) {
   .dynamic-film-copy {
     top: 18%;
   }
-  .film-top-download {
-    top: 86px;
-    right: 1rem;
+  .header-download-all {
+    padding: .7rem .8rem;
+    letter-spacing: .07em;
   }
   .film-hover-preview {
     display: none;

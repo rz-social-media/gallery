@@ -1,7 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -394,19 +394,24 @@ export default function CoupleGallery() {
         style={coverStyle}
       >
         <div className="dynamic-film-cover" />
-        <DynamicHeader names={names} back={backHome} />
+        <DynamicHeader
+          names={names}
+          back={backHome}
+          action={
+            <a
+              className="page-download-all header-download-all"
+              href={downloadUrl("videos")}
+              onClick={(event) => adaptDownload(event, "videos")}
+            >
+              <Icon name="download" /> Download all films
+            </a>
+          }
+        />
         <section className="dynamic-film-copy">
           <small>A wedding story</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
         </section>
-        <a
-          className="page-download-all film-top-download"
-          href={downloadUrl("videos")}
-          onClick={(event) => adaptDownload(event, "videos")}
-        >
-          <Icon name="download" /> Download all films
-        </a>
         <section className="dynamic-film-rail">
           {films.map((film, index) => (
             <article
@@ -635,7 +640,7 @@ function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back"
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
-function DynamicHeader({ names, back }: { names: string; back: () => void }) {
+function DynamicHeader({ names, back, action }: { names: string; back: () => void; action?: ReactNode }) {
   return (
     <header className="dynamic-topbar">
       <button onClick={back}>
@@ -645,7 +650,7 @@ function DynamicHeader({ names, back }: { names: string; back: () => void }) {
           <small>{names}</small>
         </span>
       </button>
-      <button onClick={back}>← Gallery</button>
+      {action}
     </header>
   );
 }
