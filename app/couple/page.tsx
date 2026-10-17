@@ -1,6 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
+import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -23,6 +24,8 @@ type Gallery = {
   location: string;
   weddingDate: string;
   note: string;
+  computerCoverUrl?: string;
+  phoneCoverUrl?: string;
   media: Media[];
 };
 
@@ -101,7 +104,20 @@ export default function CoupleGallery() {
   const photos = gallery.media.filter((m) => m.type === "photo" && m.url);
   const films = gallery.media.filter((m) => m.type === "video" && m.playbackId);
   const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
-  const cover = photos[0]?.url;
+  const automaticCover =
+    photos[0]?.url ||
+    gallery.media.find((item) => item.type === "video" && item.posterUrl)
+      ?.posterUrl;
+  const computerCover =
+    gallery.computerCoverUrl || gallery.phoneCoverUrl || automaticCover;
+  const phoneCover =
+    gallery.phoneCoverUrl || gallery.computerCoverUrl || automaticCover;
+  const coverStyle = {
+    "--gallery-cover-computer": computerCover
+      ? `url("${computerCover}")`
+      : "none",
+    "--gallery-cover-phone": phoneCover ? `url("${phoneCover}")` : "none",
+  } as CSSProperties;
   const downloadUrl = (type: "all" | "photos" | "videos") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}`;
   const openView = (next: "photos" | "films") => {
@@ -258,14 +274,9 @@ export default function CoupleGallery() {
     return (
       <main
         className="dynamic-films"
-        style={
-          cover
-            ? {
-                backgroundImage: `linear-gradient(90deg,rgba(5,4,3,.82),rgba(5,4,3,.18)),url(${cover})`,
-              }
-            : undefined
-        }
+        style={coverStyle}
       >
+        <div className="dynamic-film-cover" />
         <DynamicHeader names={names} back={backHome} />
         <section className="dynamic-film-copy">
           <small>A wedding story</small>
@@ -320,7 +331,7 @@ export default function CoupleGallery() {
     <main className="dynamic-home">
       <div
         className="dynamic-cover"
-        style={cover ? { backgroundImage: `url(${cover})` } : undefined}
+        style={coverStyle}
       />
       <div className="dynamic-shade" />
       <header>

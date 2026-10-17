@@ -543,6 +543,66 @@ body:has(.gm-login) {
   border: 1px solid #cfc4b5;
   background: white;
 }
+.gallery-covers-editor .article-head p {
+  max-width: 620px;
+  margin: -0.8rem 0 1.6rem;
+  color: #756d64;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.gallery-cover-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.gallery-cover-cards > section {
+  padding: 1rem;
+  border: 1px solid #d8cec1;
+  background: #f8f3eb;
+}
+.gallery-cover-cards > section > div {
+  height: 210px;
+  position: relative;
+  overflow: hidden;
+  background: #ded5c9;
+}
+.gallery-cover-cards > section > div.is-phone {
+  width: min(42%, 150px);
+  aspect-ratio: 9 / 16;
+  height: auto;
+}
+.gallery-cover-cards img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gallery-cover-cards span {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(24, 19, 15, 0.78);
+  color: white;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gallery-cover-cards h3 {
+  margin: 0.9rem 0 0.6rem;
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+.gallery-cover-cards button {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #bfb2a2;
+  background: white;
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+.gallery-cover-cards button:hover {
+  border-color: #6b3440;
+  transform: translateY(-2px);
+}
 .gm-edit aside {
   position: fixed;
   right: 1.5rem;
@@ -619,6 +679,9 @@ body:has(.gm-login) {
   }
   .cover-options {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .gallery-cover-cards {
+    grid-template-columns: 1fr;
   }
   .gm-login form {
     padding: 2rem;
@@ -763,6 +826,7 @@ body:has(.dynamic-photos) {
   inset: 0;
 }
 .dynamic-cover {
+  background-image: var(--gallery-cover-computer);
   background-size: cover;
   background-position: center;
   transform: scale(1.01);
@@ -1009,6 +1073,13 @@ body:has(.dynamic-photos) {
   color: white;
   position: relative;
 }
+.dynamic-film-cover {
+  position: absolute;
+  inset: 0;
+  background-image: var(--gallery-cover-computer);
+  background-position: center;
+  background-size: cover;
+}
 .dynamic-films .dynamic-topbar {
   position: relative;
   z-index: 2;
@@ -1066,6 +1137,10 @@ body:has(.dynamic-photos) {
   background: linear-gradient(90deg, #08060488, transparent);
 }
 @media (max-width: 700px) {
+  .dynamic-cover,
+  .dynamic-film-cover {
+    background-image: var(--gallery-cover-phone);
+  }
   .dynamic-photo-grid {
     columns: 2;
   }

@@ -25,6 +25,8 @@ type Gallery = {
   weddingDate: string;
   note: string;
   published: boolean;
+  computerCoverUrl?: string;
+  phoneCoverUrl?: string;
   media: Media[];
 };
 const blank = (): Gallery => ({
@@ -282,6 +284,9 @@ function Editor({
     [dropActive, setDropActive] = useState(false),
     [draggedMediaId, setDraggedMediaId] = useState<string | null>(null),
     [coverFor, setCoverFor] = useState<string | null>(null),
+    [galleryCoverFor, setGalleryCoverFor] = useState<
+      "computerCoverUrl" | "phoneCoverUrl" | null
+    >(null),
     [deleting, setDeleting] = useState(false);
   const galleryRef = useRef(gallery);
   useEffect(() => {
@@ -405,6 +410,23 @@ function Editor({
     setCoverFor(null);
     void updateMedia(media);
   }
+  function selectGalleryCover(
+    field: "computerCoverUrl" | "phoneCoverUrl",
+    coverUrl?: string,
+  ) {
+    const updated = { ...galleryRef.current, [field]: coverUrl };
+    galleryRef.current = updated;
+    change(updated);
+    setGalleryCoverFor(null);
+    if (updated.slug) void persist(updated);
+  }
+  const coverCandidates = gallery.media.flatMap((item) => {
+    const url = item.type === "photo" ? item.url : item.posterUrl;
+    return url
+      ? [{ id: item.id, url, alt: item.alt || item.title || item.filename }]
+      : [];
+  });
+  const automaticCover = coverCandidates[0]?.url;
   async function deleteGallery() {
     if (!gallery.slug) return;
     const names =
@@ -818,6 +840,43 @@ function Editor({
               </div>
             ))}
         </article>
+        <article className="gallery-covers-editor">
+          <div className="article-head">
+            <div>
+              <small>02</small>
+              <h2>Gallery covers</h2>
+              <p>
+                Choose one image for computers and one for phones. If you leave
+                either empty, the gallery automatically uses the first available
+                photo or film cover.
+              </p>
+            </div>
+          </div>
+          <div className="gallery-cover-cards">
+            {(
+              [
+                ["computerCoverUrl", "Computer cover"],
+                ["phoneCoverUrl", "Phone cover"],
+              ] as const
+            ).map(([field, label]) => {
+              const selected = gallery[field];
+              return (
+                <section key={field}>
+                  <div className={field === "phoneCoverUrl" ? "is-phone" : ""}>
+                    {(selected || automaticCover) && (
+                      <img src={selected || automaticCover} alt="" />
+                    )}
+                    <span>{selected ? "Selected" : "Automatic default"}</span>
+                  </div>
+                  <h3>{label}</h3>
+                  <button onClick={() => setGalleryCoverFor(field)}>
+                    {selected ? "Change cover" : "Choose cover"}
+                  </button>
+                </section>
+              );
+            })}
+          </div>
+        </article>
         {coverFor && (
           <div className="cover-picker" onClick={() => setCoverFor(null)}>
             <section onClick={(event) => event.stopPropagation()}>
@@ -848,6 +907,45 @@ function Editor({
                 onClick={() => selectVideoCover(coverFor)}
               >
                 Use automatic film thumbnail
+              </button>
+            </section>
+          </div>
+        )}
+        {galleryCoverFor && (
+          <div
+            className="cover-picker"
+            onClick={() => setGalleryCoverFor(null)}
+          >
+            <section onClick={(event) => event.stopPropagation()}>
+              <div>
+                <div>
+                  <small>Gallery cover</small>
+                  <h2>
+                    Choose the {galleryCoverFor === "phoneCoverUrl" ? "phone" : "computer"} cover
+                  </h2>
+                </div>
+                <button onClick={() => setGalleryCoverFor(null)}>×</button>
+              </div>
+              <div className="cover-options">
+                {coverCandidates.map((candidate) => (
+                  <button
+                    key={candidate.id}
+                    onClick={() =>
+                      selectGalleryCover(galleryCoverFor, candidate.url)
+                    }
+                  >
+                    <img src={candidate.url} alt={candidate.alt} />
+                  </button>
+                ))}
+              </div>
+              {!coverCandidates.length && (
+                <p>Upload a photograph or film first, then choose it here.</p>
+              )}
+              <button
+                className="automatic-cover"
+                onClick={() => selectGalleryCover(galleryCoverFor)}
+              >
+                Use automatic default
               </button>
             </section>
           </div>
