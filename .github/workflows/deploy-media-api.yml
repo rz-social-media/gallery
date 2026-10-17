@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: infrastructure/media-api/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: Configure R2 browser uploads
+        run: npx wrangler r2 bucket cors set rz-gallery-media --file cors.json --force
       - name: Configure Worker secrets
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

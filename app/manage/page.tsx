@@ -269,12 +269,20 @@ function Editor({
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", data.uploadUrl);
+      xhr.setRequestHeader("Content-Type", data.contentType);
       xhr.upload.onprogress = (e) =>
         e.lengthComputable &&
         setProgress(Math.round((e.loaded / e.total) * 100));
       xhr.onload = () =>
-        xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
-      xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.status < 300
+          ? resolve()
+          : reject(new Error(`Upload failed (storage returned ${xhr.status})`));
+      xhr.onerror = () =>
+        reject(
+          new Error(
+            "Upload could not reach storage. Check the connection and try again.",
+          ),
+        );
       xhr.send(file);
     });
     return data.key;
