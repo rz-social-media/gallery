@@ -51,6 +51,7 @@ export default function CoupleGallery() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
+    const preview = params.get("preview");
     setSharedPhotoIds((params.get("photos") || "").split(",").filter(Boolean).slice(0, 10));
     const initialView = window.location.hash.replace("#", "");
     if (initialView === "photos" || initialView === "films") {
@@ -62,14 +63,22 @@ export default function CoupleGallery() {
       setError("Gallery link is incomplete.");
       return;
     }
-    fetch(`${API}/api/galleries/${encodeURIComponent(id)}`, {
+    fetch(`${API}/api/galleries/${encodeURIComponent(id)}${preview ? `?preview=${encodeURIComponent(preview)}` : ""}`, {
       cache: "no-store",
     })
       .then(async (r) => {
         if (!r.ok) throw new Error("This gallery is not available yet.");
         return r.json();
       })
-      .then(setGallery)
+      .then((data) => {
+        setGallery(data);
+        if (!preview)
+          void fetch(`${API}/api/analytics/${encodeURIComponent(id)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "view" }),
+          });
+      })
       .catch((e) => setError(e.message));
   }, []);
   useEffect(() => {
@@ -153,6 +162,11 @@ export default function CoupleGallery() {
     event: ReactMouseEvent<HTMLAnchorElement>,
     type: "all" | "photos" | "videos",
   ) => {
+    void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "download" }),
+    });
     if (
       window.matchMedia("(pointer: coarse)").matches ||
       window.innerWidth <= 760
@@ -506,7 +520,14 @@ export default function CoupleGallery() {
                 if (player) player.currentTime = 0;
               }}
             >
-              <button onClick={() => setActiveFilm(index)}>
+              <button onClick={() => {
+                setActiveFilm(index);
+                void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ type: "play" }),
+                });
+              }}>
                 <img
                   src={
                     film.posterUrl ||

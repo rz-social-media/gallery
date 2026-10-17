@@ -26,6 +26,8 @@ type Gallery = {
   note: string;
   published: boolean;
   updatedAt?: string;
+  previewToken?: string;
+  deletedAt?: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
   media: Media[];
@@ -53,6 +55,14 @@ export default function Manager() {
     [rows, setRows] = useState<Gallery[]>([]),
     [active, setActive] = useState<Gallery | null>(null),
     [openMenu, setOpenMenu] = useState<string | null>(null),
+    [trashRows, setTrashRows] = useState<Gallery[]>([]),
+    [showTrash, setShowTrash] = useState(false),
+    [analytics, setAnalytics] = useState<Record<string, { view: number; play: number; download: number }>>({}),
+    [quickPreview, setQuickPreview] = useState<Gallery | null>(null),
+    [quickPreviewMode, setQuickPreviewMode] = useState<"computer" | "phone">("computer"),
+    [coverGallery, setCoverGallery] = useState<Gallery | null>(null),
+    [quickCoverField, setQuickCoverField] = useState<"computerCoverUrl" | "phoneCoverUrl">("computerCoverUrl"),
+    [coverUploading, setCoverUploading] = useState(false),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
@@ -70,7 +80,7 @@ export default function Manager() {
       throw new Error(
         response.status === 401
           ? "Invalid access code"
-          : data.error || "Request failed",
+          : data.error || data.issues?.join(" · ") || "Request failed",
       );
     return data;
   }
@@ -82,6 +92,7 @@ export default function Manager() {
       setCode(value);
       sessionStorage.setItem("rz-admin-code", value);
       setRows(list);
+      void loadAnalytics(list, value);
       setReady(true);
     } catch (e) {
       setNotice((e as Error).message);
@@ -89,7 +100,92 @@ export default function Manager() {
     setBusy(false);
   }
   async function load() {
-    setRows(await call("/api/galleries"));
+    const list = await call("/api/galleries");
+    setRows(list);
+    void loadAnalytics(list);
+  }
+  async function loadAnalytics(galleries: Gallery[], value = code) {
+    const entries = await Promise.all(
+      galleries.map(async (gallery) => {
+        try {
+          return [gallery.slug, await call(`/api/analytics/${gallery.slug}`, undefined, value)] as const;
+        } catch {
+          return [gallery.slug, { view: 0, play: 0, download: 0 }] as const;
+        }
+      }),
+    );
+    setAnalytics(Object.fromEntries(entries));
+  }
+  async function openQuickPreview(gallery: Gallery) {
+    const updated = gallery.previewToken
+      ? gallery
+      : { ...gallery, previewToken: crypto.randomUUID() };
+    if (!gallery.previewToken) {
+      await call(`/api/galleries/${gallery.slug}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      setRows((current) => current.map((item) => item.slug === gallery.slug ? updated : item));
+    }
+    setQuickPreview(updated);
+  }
+  async function applyQuickCover(url: string) {
+    if (!coverGallery) return;
+    const updated = { ...coverGallery, [quickCoverField]: url };
+    const saved = await call(`/api/galleries/${coverGallery.slug}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+    setRows((current) => current.map((item) => item.slug === saved.slug ? saved : item));
+    setCoverGallery(saved);
+    setNotice("Cover updated");
+    window.setTimeout(() => setNotice(""), 1800);
+  }
+  async function uploadQuickCover(file: File) {
+    if (!coverGallery || !file.type.startsWith("image/")) return;
+    setCoverUploading(true);
+    try {
+      const web = await resize(file);
+      const hash = await createSHA256();
+      hash.init();
+      hash.update(new Uint8Array(await web.arrayBuffer()));
+      const sha256 = hash.digest("hex");
+      const prepared = await call("/api/uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coupleSlug: coverGallery.slug,
+          filename: `${file.name}.cover.jpg`,
+          contentType: web.type || "image/jpeg",
+          kind: "photo-web",
+          sha256,
+        }),
+      });
+      if (!prepared.exists) {
+        const uploaded = await fetch(prepared.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": prepared.contentType },
+          body: web,
+        });
+        if (!uploaded.ok) throw new Error("Cover upload failed");
+      }
+      await applyQuickCover(`${API}/media/${prepared.key}`);
+    } catch (error) {
+      alert((error as Error).message);
+    } finally {
+      setCoverUploading(false);
+    }
+  }
+  async function openTrash() {
+    setTrashRows(await call("/api/trash"));
+    setShowTrash(true);
+  }
+  async function restoreGallery(gallery: Gallery) {
+    await call(`/api/galleries/${gallery.slug}/restore`, { method: "POST" });
+    setTrashRows((current) => current.filter((item) => item.slug !== gallery.slug));
+    await load();
   }
   async function save(g: Gallery, published: boolean) {
     const slug = g.slug || slugify(`${g.partnerOne}-${g.partnerTwo}`);
@@ -121,6 +217,28 @@ export default function Manager() {
           });
         }
         nextGallery = { ...nextGallery, media };
+        if (media.some((item) => item.type === "video" && !item.playbackId)) {
+          const draft = { ...nextGallery, published: false };
+          const saved = await call(`/api/galleries/${slug}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(draft),
+          });
+          setActive(saved);
+          setNotice("Films are processing. Health check will run automatically when they are ready.");
+          setBusy(false);
+          return;
+        }
+        await call(`/api/galleries/${slug}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...nextGallery, published: false }),
+        });
+        try {
+          await call(`/api/galleries/${slug}/health`);
+        } catch (error) {
+          throw new Error(`Health check failed: ${(error as Error).message}`);
+        }
       }
       const saved = await call(`/api/galleries/${slug}`, {
         method: "POST",
@@ -138,7 +256,7 @@ export default function Manager() {
     const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
     if (
       !window.confirm(
-        `Delete ${names}'s entire gallery? This cannot be undone.`,
+        `Move ${names}'s gallery to Trash? You can restore it for 30 days.`,
       )
     )
       return;
@@ -234,8 +352,24 @@ export default function Manager() {
               <i>ready to share.</i>
             </h1>
           </div>
-          <button onClick={() => setActive(blank())}>＋ New gallery</button>
+          <div className="gm-title-actions">
+            <button onClick={() => void openTrash()}>Trash</button>
+            <button onClick={() => setActive(blank())}>＋ New gallery</button>
+          </div>
         </div>
+        {showTrash && (
+          <section className="trash-panel">
+            <div><h2>Recently deleted</h2><button onClick={() => setShowTrash(false)}>Close</button></div>
+            <p>Galleries are permanently deleted after 30 days.</p>
+            {trashRows.length === 0 ? <p>Trash is empty.</p> : trashRows.map((gallery) => (
+              <article key={gallery.slug}>
+                <span>{gallery.partnerOne} &amp; {gallery.partnerTwo}</span>
+                <small>{gallery.deletedAt ? new Date(gallery.deletedAt).toLocaleDateString() : ""}</small>
+                <button onClick={() => void restoreGallery(gallery)}>Restore</button>
+              </article>
+            ))}
+          </section>
+        )}
         <div className="gm-grid">
           {rows.map((g) => {
             const coverUrl =
@@ -257,6 +391,12 @@ export default function Manager() {
                     {g.partnerOne} <i>&</i> {g.partnerTwo}
                   </h2>
                   <p>{g.location || "Location not added"}</p>
+                  <small className="gm-card-stats">
+                    {analytics[g.slug]?.view || 0} views · {analytics[g.slug]?.play || 0} plays · {analytics[g.slug]?.download || 0} downloads
+                  </small>
+                </button>
+                <button className="gm-quick-preview" onClick={() => void openQuickPreview(g)}>
+                  Preview
                 </button>
                 <div className="gm-card-menu">
                   <button
@@ -280,6 +420,12 @@ export default function Manager() {
                       >
                         <span aria-hidden="true">⧉</span> Copy URL
                       </button>
+                      <button onClick={() => { setOpenMenu(null); void openQuickPreview(g); }}>
+                        <span aria-hidden="true">◉</span> Quick Preview
+                      </button>
+                      <button onClick={() => { setOpenMenu(null); setCoverGallery(g); }}>
+                        <span aria-hidden="true">▣</span> Change Cover
+                      </button>
                       <button
                         className="is-danger"
                         onClick={() => {
@@ -301,6 +447,50 @@ export default function Manager() {
         </div>
       </section>
       {notice && <aside className="gm-dashboard-notice">{notice}</aside>}
+      {quickPreview?.previewToken && (
+        <div className="preview-modal" role="dialog" aria-modal="true">
+          <div className="preview-toolbar">
+            <strong>{quickPreview.partnerOne} &amp; {quickPreview.partnerTwo}</strong>
+            <div>
+              <button className={quickPreviewMode === "computer" ? "active" : ""} onClick={() => setQuickPreviewMode("computer")}>Computer</button>
+              <button className={quickPreviewMode === "phone" ? "active" : ""} onClick={() => setQuickPreviewMode("phone")}>Phone</button>
+              <button onClick={() => setQuickPreview(null)}>Close</button>
+            </div>
+          </div>
+          <div className={`preview-device is-${quickPreviewMode}`}>
+            <iframe title="Client gallery preview" src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(quickPreview.slug)}&preview=${encodeURIComponent(quickPreview.previewToken)}`} />
+          </div>
+        </div>
+      )}
+      {coverGallery && (
+        <div className="cover-modal" role="dialog" aria-modal="true">
+          <section>
+            <div className="cover-modal-head">
+              <div><small>Quick edit</small><h2>Change cover</h2></div>
+              <button onClick={() => setCoverGallery(null)}>×</button>
+            </div>
+            <div className="cover-targets">
+              <button className={quickCoverField === "computerCoverUrl" ? "active" : ""} onClick={() => setQuickCoverField("computerCoverUrl")}>Computer Cover</button>
+              <button className={quickCoverField === "phoneCoverUrl" ? "active" : ""} onClick={() => setQuickCoverField("phoneCoverUrl")}>Phone Cover</button>
+            </div>
+            <label className="cover-upload">
+              {coverUploading ? "Uploading…" : "＋ Upload new cover"}
+              <input hidden type="file" accept="image/*" disabled={coverUploading} onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) void uploadQuickCover(file);
+              }} />
+            </label>
+            <p>Or choose from media already in this gallery.</p>
+            <div className="cover-library">
+              {coverGallery.media.flatMap((item) => {
+                const url = item.type === "photo" ? item.url : item.posterUrl;
+                return url ? [<button key={item.id} onClick={() => void applyQuickCover(url)}><img src={url} alt={item.alt || item.title || item.filename} /></button>] : [];
+              })}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -338,8 +528,13 @@ function Editor({
     [galleryCoverFor, setGalleryCoverFor] = useState<
       "computerCoverUrl" | "phoneCoverUrl" | null
     >(null),
-    [deleting, setDeleting] = useState(false);
+    [deleting, setDeleting] = useState(false),
+    [previewMode, setPreviewMode] = useState<"computer" | "phone" | null>(null),
+    [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle"),
+    [healthState, setHealthState] = useState<{ ok: boolean; issues: string[] } | null>(null),
+    [checkingHealth, setCheckingHealth] = useState(false);
   const galleryRef = useRef(gallery);
+  const lastAutosaved = useRef(JSON.stringify(gallery));
   useEffect(() => {
     galleryRef.current = gallery;
   }, [gallery]);
@@ -431,6 +626,57 @@ function Editor({
     });
     if (!response.ok) throw new Error("Could not save gallery progress");
   }
+  useEffect(() => {
+    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
+    if (!slug || !gallery.partnerOne || !gallery.partnerTwo) return;
+    const candidate = { ...gallery, slug };
+    const serialized = JSON.stringify(candidate);
+    if (serialized === lastAutosaved.current) return;
+    setSaveState("saving");
+    const timer = window.setTimeout(async () => {
+      try {
+        await persist(candidate);
+        lastAutosaved.current = serialized;
+        galleryRef.current = candidate;
+        if (!gallery.slug) change(candidate);
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+    }, 850);
+    return () => window.clearTimeout(timer);
+  }, [gallery]);
+  async function openPreview() {
+    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
+    if (!slug) return alert("Add both names first");
+    const updated = {
+      ...galleryRef.current,
+      slug,
+      published: galleryRef.current.published,
+      previewToken: galleryRef.current.previewToken || crypto.randomUUID(),
+    };
+    await persist(updated);
+    galleryRef.current = updated;
+    change(updated);
+    setPreviewMode("computer");
+  }
+  async function runHealthCheck() {
+    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
+    if (!slug) return alert("Add both names first");
+    setCheckingHealth(true);
+    try {
+      await persist({ ...galleryRef.current, slug, published: false });
+      const response = await fetch(`${API}/api/galleries/${slug}/health`, {
+        headers: { Authorization: `Bearer ${code}` },
+      });
+      const result = await response.json();
+      setHealthState({ ok: Boolean(result.ok), issues: result.issues || [] });
+    } catch (error) {
+      setHealthState({ ok: false, issues: [(error as Error).message] });
+    } finally {
+      setCheckingHealth(false);
+    }
+  }
   async function updateMedia(media: Media[]) {
     const updated = { ...galleryRef.current, media };
     galleryRef.current = updated;
@@ -485,7 +731,7 @@ function Editor({
       gallery.slug;
     if (
       !window.confirm(
-        `Delete ${names}'s entire gallery?\n\nThis permanently deletes the gallery, every uploaded photo and film, and cannot be undone.`,
+        `Move ${names}'s gallery to Trash?\n\nYou can restore it for 30 days before the files are permanently removed.`,
       )
     )
       return;
@@ -511,6 +757,70 @@ function Editor({
     slug: string,
     sha256: string,
   ) {
+    if (file.size >= 48 * 1024 * 1024) {
+      const sessionKey = `rz-gallery-upload-${sha256}`;
+      type UploadSession = {
+        key: string;
+        uploadId: string;
+        parts: { partNumber: number; etag: string }[];
+      };
+      let session: UploadSession | null = null;
+      try {
+        session = JSON.parse(localStorage.getItem(sessionKey) || "null");
+      } catch {
+        localStorage.removeItem(sessionKey);
+      }
+      if (!session) {
+        const started = await fetch(`${API}/api/multipart/start`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${code}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            coupleSlug: slug,
+            contentType: file.type || "application/octet-stream",
+            kind,
+            sha256,
+          }),
+        });
+        const data = await started.json();
+        if (!started.ok) throw new Error(data.error || "Could not prepare upload");
+        if (data.exists) return data.key as string;
+        session = { key: data.key, uploadId: data.uploadId, parts: [] };
+        localStorage.setItem(sessionKey, JSON.stringify(session));
+      }
+      const chunkSize = 8 * 1024 * 1024;
+      const totalParts = Math.ceil(file.size / chunkSize);
+      for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+        if (session.parts.some((part) => part.partNumber === partNumber)) continue;
+        const chunk = file.slice((partNumber - 1) * chunkSize, Math.min(partNumber * chunkSize, file.size));
+        let uploaded: { partNumber: number; etag: string } | null = null;
+        for (let attempt = 1; attempt <= 3 && !uploaded; attempt++) {
+          const response = await fetch(
+            `${API}/api/multipart/part?key=${encodeURIComponent(session.key)}&uploadId=${encodeURIComponent(session.uploadId)}&partNumber=${partNumber}`,
+            { method: "PUT", headers: { Authorization: `Bearer ${code}` }, body: chunk },
+          );
+          if (response.ok) uploaded = await response.json();
+          else if (attempt === 3) throw new Error(`Upload failed on part ${partNumber}`);
+          else await new Promise((resolve) => window.setTimeout(resolve, attempt * 1200));
+        }
+        session.parts.push(uploaded!);
+        localStorage.setItem(sessionKey, JSON.stringify(session));
+        setProgress(Math.round((session.parts.length / totalParts) * 100));
+      }
+      const completed = await fetch(`${API}/api/multipart/complete`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${code}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(session),
+      });
+      if (!completed.ok) throw new Error("Could not finalize upload");
+      localStorage.removeItem(sessionKey);
+      return session.key;
+    }
     const response = await fetch(`${API}/api/uploads`, {
       method: "POST",
       headers: {
@@ -528,25 +838,31 @@ function Editor({
     if (!response.ok) throw new Error("Could not prepare upload");
     const data = await response.json();
     if (data.exists) return data.key as string;
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", data.uploadUrl);
-      xhr.setRequestHeader("Content-Type", data.contentType);
-      xhr.upload.onprogress = (e) =>
-        e.lengthComputable &&
-        setProgress(Math.round((e.loaded / e.total) * 100));
-      xhr.onload = () =>
-        xhr.status < 300
-          ? resolve()
-          : reject(new Error(`Upload failed (storage returned ${xhr.status})`));
-      xhr.onerror = () =>
-        reject(
-          new Error(
-            "Upload could not reach storage. Check the connection and try again.",
-          ),
-        );
-      xhr.send(file);
-    });
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", data.uploadUrl);
+          xhr.setRequestHeader("Content-Type", data.contentType);
+          xhr.upload.onprogress = (e) =>
+            e.lengthComputable &&
+            setProgress(Math.round((e.loaded / e.total) * 100));
+          xhr.onload = () =>
+            xhr.status < 300
+              ? resolve()
+              : reject(new Error(`Upload failed (storage returned ${xhr.status})`));
+          xhr.onerror = () => reject(new Error("Upload lost its connection"));
+          xhr.send(file);
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 1200));
+      }
+    }
+    if (lastError) throw new Error(`${lastError.message}. Retried 3 times.`);
     return data.key;
   }
   async function fingerprint(file: Blob) {
@@ -650,12 +966,42 @@ function Editor({
       <header>
         <button onClick={close}>← All galleries</button>
         <div>
+          <span className={`autosave-state is-${saveState}`}>
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : ""}
+          </span>
+          <button onClick={() => void openPreview()}>Preview</button>
+          <button onClick={() => void runHealthCheck()}>{checkingHealth ? "Checking…" : "Health check"}</button>
           <button onClick={() => save(gallery, false)}>Save draft</button>
           <button className="primary" onClick={() => save(gallery, true)}>
             {busy ? "Publishing…" : "Publish gallery"}
           </button>
         </div>
       </header>
+      {healthState && (
+        <aside className={`health-panel ${healthState.ok ? "is-ok" : "is-error"}`}>
+          <strong>{healthState.ok ? "Ready to publish" : "Needs attention"}</strong>
+          {healthState.issues.length > 0 && <ul>{healthState.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+          <button onClick={() => setHealthState(null)}>×</button>
+        </aside>
+      )}
+      {previewMode && galleryRef.current.previewToken && (
+        <div className="preview-modal" role="dialog" aria-modal="true">
+          <div className="preview-toolbar">
+            <strong>Client preview</strong>
+            <div>
+              <button className={previewMode === "computer" ? "active" : ""} onClick={() => setPreviewMode("computer")}>Computer</button>
+              <button className={previewMode === "phone" ? "active" : ""} onClick={() => setPreviewMode("phone")}>Phone</button>
+              <button onClick={() => setPreviewMode(null)}>Close</button>
+            </div>
+          </div>
+          <div className={`preview-device is-${previewMode}`}>
+            <iframe
+              title="Client gallery preview"
+              src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(galleryRef.current.slug)}&preview=${encodeURIComponent(galleryRef.current.previewToken)}`}
+            />
+          </div>
+        </div>
+      )}
       <section className="gm-edit">
         <small>Gallery details</small>
         <h1>
@@ -796,6 +1142,7 @@ function Editor({
                 >
                   <img src={p.url} />
                   {i === 0 && <span>Cover</span>}
+                  <b className="media-ready-badge">Ready</b>
                   <button
                     onClick={() =>
                       void updateMedia(
@@ -860,6 +1207,9 @@ function Editor({
                     }}
                     onBlur={() => void persist(galleryRef.current)}
                   />
+                  <small className={`media-status ${v.playbackId ? "is-ready" : v.assetId ? "is-processing" : "is-uploaded"}`}>
+                    {v.playbackId ? "Ready" : v.assetId ? (videoStates[v.id] || "Processing") : "Uploaded · waiting for publish"}
+                  </small>
                   {!v.assetId && (
                     <small>
                       Ready in draft · Streaming starts only when you publish

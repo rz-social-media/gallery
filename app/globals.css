@@ -869,6 +869,157 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.autosave-state {
+  min-width: 72px;
+  color: #7e7064;
+  font-size: .62rem;
+  letter-spacing: .08em;
+}
+.autosave-state.is-saved { color: #55715d; }
+.autosave-state.is-error { color: #a33a3a; }
+.health-panel {
+  width: min(720px, calc(100% - 2rem));
+  margin: 1rem auto 0;
+  padding: 1rem 3rem 1rem 1.1rem;
+  position: relative;
+  border: 1px solid #cfc2b3;
+  background: #fffdf8;
+  color: #332922;
+}
+.health-panel.is-ok { border-color: #78937e; }
+.health-panel.is-error { border-color: #b56b6b; }
+.health-panel ul { margin: .65rem 0 0; padding-left: 1.2rem; }
+.health-panel > button { position: absolute; top: .5rem; right: .6rem; border: 0; background: transparent; }
+.preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: #17120e;
+}
+.preview-toolbar {
+  min-height: 66px;
+  padding: .75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: white;
+}
+.preview-toolbar > div { display: flex; gap: .45rem; }
+.preview-toolbar button {
+  padding: .65rem .85rem;
+  border: 1px solid rgba(255,255,255,.28);
+  background: transparent;
+  color: white;
+}
+.preview-toolbar button.active { background: white; color: #211a16; }
+.preview-device {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: #d9d0c5;
+}
+.preview-device iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #111;
+  box-shadow: 0 24px 80px rgba(0,0,0,.32);
+}
+.preview-device.is-phone iframe {
+  width: min(390px, 100%);
+  height: min(780px, 100%);
+  border: 8px solid #17120e;
+  border-radius: 30px;
+}
+.gm-title-actions { display: flex; gap: .6rem; }
+.trash-panel {
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  border: 1px solid #d2c5b7;
+  background: #fffdf8;
+}
+.trash-panel > div,
+.trash-panel article { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.trash-panel article { padding: .85rem 0; border-top: 1px solid #e5ddd4; }
+.gm-card { position: relative; }
+.gm-quick-preview {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  z-index: 3;
+  padding: .65rem .9rem;
+  border: 1px solid rgba(255,255,255,.55);
+  background: rgba(22,17,14,.75);
+  color: white;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.gm-card:hover .gm-quick-preview,
+.gm-quick-preview:focus-visible { opacity: 1; transform: translate(-50%, 0); }
+.gm-card-stats { display: block; margin-top: .55rem; color: #887b6f; }
+.media-ready-badge {
+  position: absolute;
+  left: .45rem;
+  bottom: .45rem;
+  padding: .3rem .45rem;
+  background: rgba(28,62,39,.84);
+  color: white;
+  font-size: .55rem;
+}
+.media-status { display: block; margin-top: .45rem; color: #8c796b; }
+.media-status.is-ready { color: #55715d; }
+.media-status.is-processing { color: #8a6c32; }
+.cover-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(18, 14, 11, .76);
+  backdrop-filter: blur(14px);
+}
+.cover-modal > section {
+  width: min(780px, 100%);
+  max-height: 88svh;
+  overflow: auto;
+  padding: 1.4rem;
+  background: #f7f3ed;
+  color: #2c231d;
+}
+.cover-modal-head,
+.cover-targets { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
+.cover-modal-head h2 { margin: .25rem 0 1rem; font-family: Georgia, serif; font-size: 2rem; font-weight: 400; }
+.cover-modal-head > button { width: 42px; height: 42px; border: 1px solid #cdbfaf; background: transparent; }
+.cover-targets { justify-content: flex-start; }
+.cover-targets button,
+.cover-upload {
+  padding: .8rem 1rem;
+  border: 1px solid #ad9d8c;
+  background: transparent;
+  color: #342a23;
+}
+.cover-targets button.active { background: #342a23; color: white; }
+.cover-upload { display: inline-flex; margin: 1rem 0 0; }
+.cover-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .6rem;
+}
+.cover-library button { padding: 0; border: 2px solid transparent; background: #ded4c8; aspect-ratio: 4 / 3; overflow: hidden; }
+.cover-library button:hover { border-color: #6f3540; }
+.cover-library img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 700px) {
+  .gm-quick-preview { display: none; }
+  .preview-toolbar { align-items: flex-start; flex-direction: column; }
+  .preview-device { padding: .4rem; }
+}
+
 html:has(.photo-story),
 body:has(.photo-story) {
   overflow: auto;

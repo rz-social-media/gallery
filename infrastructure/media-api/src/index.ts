@@ -19,7 +19,7 @@ const json = (data: unknown, status = 200, origin = "*") =>
     headers: {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Headers": "authorization, content-type",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Cache-Control": "no-store",
     },
   });
@@ -376,9 +376,27 @@ function mobileDownloadsPage(
     })
     .join("");
   return new Response(
-    `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>הורדת הגלריה | ${escapeHtml(names)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f3eee7;color:#271f19;font-family:Arial,sans-serif}main{width:min(760px,100%);margin:auto;padding:28px 18px 70px}small{color:#7e7064;letter-spacing:.08em;font-size:11px}h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400}h1{font-size:42px;margin:8px 0}h2{font-size:25px;margin:0 0 18px}p{color:#74695f;line-height:1.65}.zip{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;margin:24px 0 12px;background:#6f3540;color:white;text-decoration:none;font-size:14px}.guide{margin:26px 0;padding:24px;background:#fffdf8;border:1px solid #ded4c8}.tabs{display:flex;gap:8px;margin-bottom:20px}.tabs button{flex:1;padding:11px;border:1px solid #cfc2b3;background:transparent;color:#50443a}.tabs button.active{background:#2e251f;color:white}.steps{display:none;margin:0;padding:0;counter-reset:step}.steps.active{display:grid;gap:14px}.steps li{list-style:none;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;line-height:1.55}.steps li:before{counter-increment:step;content:counter(step);width:28px;height:28px;display:grid;place-items:center;border:1px solid #9f8e7e;border-radius:50%;font-family:Georgia,serif}ul.files{padding:0;margin:28px 0;display:grid;gap:9px}.files li{list-style:none;display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:9px;background:#fffdf8;border:1px solid #ded4c8}img{width:64px;height:64px;object-fit:cover}strong{display:block;max-width:32vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.files small{display:block;margin-top:5px}.save-one{padding:11px 12px;border:0;background:#2e251f;color:white;font-size:12px}nav{text-align:left;direction:ltr}nav a{display:inline-block;color:#4d4037;text-decoration:none;margin-bottom:20px}.status{text-align:center;min-height:20px;font-size:12px;color:#6f3540}@media(max-width:430px){h1{font-size:36px}.files li{grid-template-columns:54px 1fr auto}img{width:54px;height:54px}.save-one{padding:10px 8px;font-size:11px}}</style></head><body><main><nav><a href="${escapeHtml(publicGalleryUrl(slug))}">← Back to gallery</a></nav><small>הקבצים המקוריים · איכות מלאה</small><h1>${escapeHtml(names)}</h1><p>להורדת כל הקבצים יחד, הורידו את קובץ ה־ZIP ופעלו לפי ההוראות למכשיר שלכם.</p><a class="zip" href="${escapeHtml(archiveHref)}">הורדת כל הגלריה כ־ZIP ↓</a><div class="status" id="status"></div><section class="guide"><h2>איך שומרים לגלריית התמונות?</h2><div class="tabs"><button data-tab="ios">iPhone</button><button data-tab="android">Android</button></div><ol class="steps" data-steps="ios"><li>לחצו על הכפתור להורדת ה־ZIP והמתינו לסיום ההורדה.</li><li>פתחו את האפליקציה Files, היכנסו ל־Downloads ולחצו פעם אחת על קובץ ה־ZIP כדי לחלץ אותו.</li><li>פתחו את התיקייה החדשה, לחצו על שלוש הנקודות ואז על Select ובחרו Select All.</li><li>לחצו על Share ובחרו Save Images או Save to Photos. התמונות יופיעו באפליקציית Photos.</li></ol><ol class="steps" data-steps="android"><li>לחצו על הכפתור להורדת ה־ZIP והמתינו לסיום ההורדה.</li><li>פתחו את Files או My Files, היכנסו ל־Downloads ולחצו על קובץ ה־ZIP.</li><li>בחרו Extract כדי לחלץ את התמונות והסרטים לתיקייה חדשה.</li><li>בחרו את הקבצים והעבירו אותם לתיקיית Pictures או DCIM. הם יופיעו באפליקציית הגלריה.</li></ol></section><h2>שמירה של קובץ בודד</h2><p>לחצו על “שמירה לתמונות” כדי לפתוח את תפריט השיתוף של המכשיר.</p><ul class="files">${rows}</ul></main><script>const isAndroid=/Android/i.test(navigator.userAgent);const activate=name=>{document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('[data-steps]').forEach(s=>s.classList.toggle('active',s.dataset.steps===name))};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>activate(b.dataset.tab));activate(isAndroid?'android':'ios');document.querySelectorAll('.save-one').forEach(button=>button.onclick=async()=>{const status=document.getElementById('status');status.textContent='מכינים את הקובץ…';try{const response=await fetch(button.dataset.href);const blob=await response.blob();const file=new File([blob],button.dataset.name,{type:blob.type||'application/octet-stream'});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});status.textContent='בחרו Save Image או Save Video';}else{location.href=button.dataset.href;}}catch(error){if(error&&error.name==='AbortError'){status.textContent='';return}location.href=button.dataset.href;}});</script></body></html>`,
+    `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>הורדת הגלריה | ${escapeHtml(names)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f3eee7;color:#271f19;font-family:Arial,sans-serif}main{width:min(760px,100%);margin:auto;padding:28px 18px 70px}small{color:#7e7064;letter-spacing:.08em;font-size:11px}h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400}h1{font-size:42px;margin:8px 0}h2{font-size:25px;margin:0 0 18px}p{color:#74695f;line-height:1.65}.zip{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;margin:24px 0 12px;background:#6f3540;color:white;text-decoration:none;font-size:14px}.guide{margin:26px 0;padding:24px;background:#fffdf8;border:1px solid #ded4c8}.language,.tabs{display:flex;gap:8px;margin-bottom:20px}.language{justify-content:flex-end}.language button,.tabs button{padding:11px;border:1px solid #cfc2b3;background:transparent;color:#50443a}.tabs button{flex:1}.language button.active,.tabs button.active{background:#2e251f;color:white}.language-panel{display:none}.language-panel.active{display:block}.steps{display:none;margin:0;padding:0;counter-reset:step}.steps.active{display:grid;gap:14px}.steps li{list-style:none;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;line-height:1.55}.steps li:before{counter-increment:step;content:counter(step);width:28px;height:28px;display:grid;place-items:center;border:1px solid #9f8e7e;border-radius:50%;font-family:Georgia,serif}ul.files{padding:0;margin:28px 0;display:grid;gap:9px}.files li{list-style:none;display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:9px;background:#fffdf8;border:1px solid #ded4c8}img{width:64px;height:64px;object-fit:cover}strong{display:block;max-width:32vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.files small{display:block;margin-top:5px}.save-one{padding:11px 12px;border:0;background:#2e251f;color:white;font-size:12px}nav{text-align:left;direction:ltr}nav a{display:inline-block;color:#4d4037;text-decoration:none;margin-bottom:20px}.status{text-align:center;min-height:20px;font-size:12px;color:#6f3540}@media(min-width:761px){main{display:none}}@media(max-width:430px){h1{font-size:36px}.files li{grid-template-columns:54px 1fr auto}img{width:54px;height:54px}.save-one{padding:10px 8px;font-size:11px}}</style></head><body><main><nav><a href="${escapeHtml(publicGalleryUrl(slug))}">← Back to gallery</a></nav><small>הקבצים המקוריים · איכות מלאה</small><h1>${escapeHtml(names)}</h1><p>להורדת כל הקבצים יחד, הורידו את קובץ ה־ZIP ופעלו לפי ההוראות למכשיר שלכם.</p><a class="zip" href="${escapeHtml(archiveHref)}">הורדת כל הגלריה כ־ZIP ↓</a><div class="status" id="status"></div><section class="guide"><div class="language"><button data-lang="he">עברית</button><button data-lang="en">English</button></div><div class="language-panel" data-language="he"><h2>איך שומרים לגלריית התמונות?</h2><div class="tabs"><button data-tab="ios">iPhone</button><button data-tab="android">Android</button></div><ol class="steps" data-steps="ios"><li>לחצו על הכפתור להורדת ה־ZIP והמתינו לסיום ההורדה.</li><li>פתחו את האפליקציה Files, היכנסו ל־Downloads ולחצו פעם אחת על קובץ ה־ZIP כדי לחלץ אותו.</li><li>פתחו את התיקייה החדשה, לחצו על שלוש הנקודות ואז על Select ובחרו Select All.</li><li>לחצו על Share ובחרו Save Images או Save to Photos. התמונות יופיעו באפליקציית Photos.</li></ol><ol class="steps" data-steps="android"><li>לחצו על הכפתור להורדת ה־ZIP והמתינו לסיום ההורדה.</li><li>פתחו את Files או My Files, היכנסו ל־Downloads ולחצו על קובץ ה־ZIP.</li><li>בחרו Extract כדי לחלץ את התמונות והסרטים לתיקייה חדשה.</li><li>בחרו את הקבצים והעבירו אותם לתיקיית Pictures או DCIM. הם יופיעו באפליקציית הגלריה.</li></ol></div><div class="language-panel" data-language="en" dir="ltr"><h2>How to save everything to Photos</h2><div class="tabs"><button data-tab="ios">iPhone</button><button data-tab="android">Android</button></div><ol class="steps" data-steps="ios"><li>Tap the ZIP download button and wait for the download to finish.</li><li>Open Files, go to Downloads, and tap the ZIP once to extract it.</li><li>Open the new folder, tap the three-dot menu, choose Select, then Select All.</li><li>Tap Share and choose Save Images or Save to Photos.</li></ol><ol class="steps" data-steps="android"><li>Tap the ZIP download button and wait for the download to finish.</li><li>Open Files or My Files, go to Downloads, and tap the ZIP file.</li><li>Choose Extract to create a folder with the photos and films.</li><li>Select the files and move them to Pictures or DCIM so they appear in Gallery.</li></ol></div></section><h2>שמירה של קובץ בודד</h2><p>לחצו על “שמירה לתמונות” כדי לפתוח את תפריט השיתוף של המכשיר.</p><ul class="files">${rows}</ul></main><script>const isAndroid=/Android/i.test(navigator.userAgent);let device=isAndroid?'android':'ios';const activateDevice=name=>{device=name;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('[data-steps]').forEach(s=>s.classList.toggle('active',s.dataset.steps===name))};const activateLanguage=name=>{document.documentElement.lang=name;document.documentElement.dir=name==='he'?'rtl':'ltr';document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('active',b.dataset.lang===name));document.querySelectorAll('[data-language]').forEach(s=>s.classList.toggle('active',s.dataset.language===name));activateDevice(device)};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>activateDevice(b.dataset.tab));document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>activateLanguage(b.dataset.lang));activateLanguage('he');document.querySelectorAll('.save-one').forEach(button=>button.onclick=async()=>{const status=document.getElementById('status');status.textContent='מכינים את הקובץ…';try{const response=await fetch(button.dataset.href);const blob=await response.blob();const file=new File([blob],button.dataset.name,{type:blob.type||'application/octet-stream'});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});status.textContent='בחרו Save Image או Save Video';}else{location.href=button.dataset.href;}}catch(error){if(error&&error.name==='AbortError'){status.textContent='';return}location.href=button.dataset.href;}});</script></body></html>`,
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
   );
+}
+
+async function permanentlyDeleteGallery(
+  env: Env,
+  slug: string,
+  gallery: Record<string, any>,
+) {
+  const mediaItems: Record<string, any>[] = Array.isArray(gallery.media) ? gallery.media : [];
+  const assetIds = [
+    ...new Set<string>(
+      mediaItems
+        .map((item: Record<string, any>) => item.assetId)
+        .filter((id: unknown): id is string => Boolean(id)),
+    ),
+  ];
+  await Promise.all(assetIds.map((id) => deleteMuxAsset(env, id)));
+  await deleteR2Prefix(env.MEDIA, `couples/${slug}/`);
+  await env.MEDIA.delete(`galleries/${slug}.json`);
 }
 
 export default {
@@ -391,12 +409,43 @@ export default {
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Headers": "authorization, content-type",
-          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         },
       });
     try {
       if (url.pathname === "/api/health")
         return json({ ok: true }, 200, origin);
+      const analyticsMatch = url.pathname.match(/^\/api\/analytics\/([^/]+)$/);
+      if (analyticsMatch && request.method === "POST") {
+        const slug = safeSlug(analyticsMatch[1]);
+        const galleryObject = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!galleryObject) return json({ error: "Gallery not found" }, 404, origin);
+        const gallery = await galleryObject.json<Record<string, any>>();
+        if (!gallery.published) return json({ error: "Gallery not found" }, 404, origin);
+        const body: { type?: string } = await request.json<{ type?: string }>().catch(() => ({}));
+        const type = ["view", "play", "download"].includes(body.type || "") ? body.type! : "view";
+        await env.MEDIA.put(
+          `analytics/${slug}/${type}/${Date.now()}-${crypto.randomUUID()}.json`,
+          JSON.stringify({ at: new Date().toISOString() }),
+          { httpMetadata: { contentType: "application/json" } },
+        );
+        return json({ ok: true }, 201, origin);
+      }
+      if (analyticsMatch && request.method === "GET") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(analyticsMatch[1]);
+        const counts: Record<string, number> = { view: 0, play: 0, download: 0 };
+        for (const type of Object.keys(counts)) {
+          let cursor: string | undefined;
+          do {
+            const listed = await env.MEDIA.list({ prefix: `analytics/${slug}/${type}/`, cursor });
+            counts[type] += listed.objects.length;
+            cursor = listed.truncated ? listed.cursor : undefined;
+          } while (cursor);
+        }
+        return json(counts, 200, origin);
+      }
       const shareMatch = url.pathname.match(/^\/share\/([^/]+)$/);
       if (shareMatch && request.method === "GET") {
         const slug = safeSlug(shareMatch[1]);
@@ -436,6 +485,52 @@ export default {
           200,
           origin,
         );
+      }
+      if (url.pathname === "/api/multipart/start" && request.method === "POST") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const body = await request.json<{
+          coupleSlug: string;
+          kind: "photo" | "photo-web" | "video" | "video-poster";
+          contentType: string;
+          sha256: string;
+        }>();
+        const slug = safeSlug(body.coupleSlug);
+        const sha256 = String(body.sha256 || "").toLowerCase();
+        if (!slug || !/^[a-f0-9]{64}$/.test(sha256))
+          return json({ error: "Invalid upload" }, 400, origin);
+        const key = `couples/${slug}/${body.kind}/${sha256}`;
+        if (await env.MEDIA.head(key)) return json({ key, exists: true }, 200, origin);
+        const upload = await env.MEDIA.createMultipartUpload(key, {
+          httpMetadata: { contentType: body.contentType || "application/octet-stream" },
+        });
+        return json({ key, uploadId: upload.uploadId, exists: false }, 200, origin);
+      }
+      if (url.pathname === "/api/multipart/part" && request.method === "PUT") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const key = url.searchParams.get("key") || "";
+        const uploadId = url.searchParams.get("uploadId") || "";
+        const partNumber = Number(url.searchParams.get("partNumber"));
+        if (!key.startsWith("couples/") || !uploadId || !Number.isInteger(partNumber) || partNumber < 1 || !request.body)
+          return json({ error: "Invalid multipart upload" }, 400, origin);
+        const upload = env.MEDIA.resumeMultipartUpload(key, uploadId);
+        const part = await upload.uploadPart(partNumber, request.body);
+        return json({ partNumber: part.partNumber, etag: part.etag }, 200, origin);
+      }
+      if (url.pathname === "/api/multipart/complete" && request.method === "POST") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const body = await request.json<{
+          key: string;
+          uploadId: string;
+          parts: R2UploadedPart[];
+        }>();
+        if (!body.key?.startsWith("couples/") || !body.uploadId || !Array.isArray(body.parts))
+          return json({ error: "Invalid multipart upload" }, 400, origin);
+        const upload = env.MEDIA.resumeMultipartUpload(body.key, body.uploadId);
+        await upload.complete(body.parts.sort((a, b) => a.partNumber - b.partNumber));
+        return json({ key: body.key }, 200, origin);
       }
       if (url.pathname === "/api/videos" && request.method === "POST") {
         if (!authorized(request, env))
@@ -533,7 +628,81 @@ export default {
             return object ? object.json() : null;
           }),
         );
-        return json(galleries.filter(Boolean), 200, origin);
+        return json(galleries.filter((gallery: any) => gallery && !gallery.deletedAt), 200, origin);
+      }
+      if (url.pathname === "/api/trash" && request.method === "GET") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const listed = await env.MEDIA.list({ prefix: "galleries/" });
+        const galleries = await Promise.all(
+          listed.objects.map(async ({ key }) => {
+            const object = await env.MEDIA.get(key);
+            return object ? object.json<Record<string, any>>() : null;
+          }),
+        );
+        return json(galleries.filter((gallery) => gallery?.deletedAt), 200, origin);
+      }
+      const healthMatch = url.pathname.match(
+        /^\/api\/galleries\/([^/]+)\/health$/,
+      );
+      if (healthMatch && request.method === "GET") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(healthMatch[1]);
+        const object = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!object) return json({ error: "Gallery not found" }, 404, origin);
+        const gallery = await object.json<Record<string, any>>();
+        const issues: string[] = [];
+        if (!gallery.partnerOne || !gallery.partnerTwo) issues.push("Add both partner names");
+        if (!gallery.weddingDate) issues.push("Add the wedding date");
+        if (!gallery.location) issues.push("Add the wedding location");
+        const media = Array.isArray(gallery.media) ? gallery.media : [];
+        if (!media.length) issues.push("Add at least one photo or film");
+        if (!gallery.computerCoverUrl && !media.some((item: any) => item.url || item.posterUrl))
+          issues.push("Choose or upload a computer cover");
+        if (!gallery.phoneCoverUrl && !media.some((item: any) => item.url || item.posterUrl))
+          issues.push("Choose or upload a phone cover");
+        const storageChecks = await Promise.all(
+          media.map(async (item: any) => ({
+            item,
+            stored: Boolean(item.originalKey && (await env.MEDIA.head(item.originalKey))),
+          })),
+        );
+        for (const { item, stored } of storageChecks) {
+          if (!stored) issues.push(`${item.filename || "A file"} is missing from storage`);
+          if (item.type === "photo" && !item.url)
+            issues.push(`${item.filename || "A photo"} has no web preview`);
+          if (item.type === "video" && !item.playbackId)
+            issues.push(`${item.filename || "A film"} is still processing`);
+        }
+        const streamChecks = await Promise.all(
+          media
+            .filter((item: any) => item.type === "video" && item.playbackId)
+            .map(async (item: any) => {
+              try {
+                const response = await fetch(`https://stream.mux.com/${item.playbackId}.m3u8`, { method: "GET" });
+                return { item, ok: response.ok };
+              } catch {
+                return { item, ok: false };
+              }
+            }),
+        );
+        for (const { item, ok } of streamChecks)
+          if (!ok) issues.push(`${item.filename || "A film"} is not streaming yet`);
+        return json(
+          {
+            ok: issues.length === 0,
+            issues,
+            checks: {
+              details: Boolean(gallery.partnerOne && gallery.partnerTwo && gallery.weddingDate && gallery.location),
+              storage: storageChecks.every(({ stored }) => stored),
+              streaming: streamChecks.every(({ ok }) => ok) && !media.some((item: any) => item.type === "video" && !item.playbackId),
+              covers: Boolean((gallery.computerCoverUrl || media.some((item: any) => item.url || item.posterUrl)) && (gallery.phoneCoverUrl || media.some((item: any) => item.url || item.posterUrl))),
+            },
+          },
+          issues.length ? 409 : 200,
+          origin,
+        );
       }
       const archiveMatch = url.pathname.match(
         /^\/api\/galleries\/([^/]+)\/download$/,
@@ -590,12 +759,18 @@ export default {
         const object = await env.MEDIA.get(`galleries/${slug}.json`);
         if (!object) return json({ error: "Gallery not found" }, 404, origin);
         const gallery = await object.json<Record<string, any>>();
-        if (!gallery.published && !authorized(request, env))
+        const previewToken = url.searchParams.get("preview");
+        if (
+          !gallery.published &&
+          !authorized(request, env) &&
+          (!previewToken || previewToken !== gallery.previewToken)
+        )
           return json({ error: "Gallery not found" }, 404, origin);
         return json(gallery, 200, origin);
       }
       if (
         url.pathname.startsWith("/api/galleries/") &&
+        !url.pathname.endsWith("/restore") &&
         request.method === "POST"
       ) {
         if (!authorized(request, env))
@@ -604,6 +779,21 @@ export default {
         if (!slug) return json({ error: "Invalid slug" }, 400, origin);
         const gallery = await request.json<Record<string, any>>();
         gallery.slug = slug;
+        gallery.updatedAt = new Date().toISOString();
+        await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), {
+          httpMetadata: { contentType: "application/json" },
+        });
+        return json(gallery, 200, origin);
+      }
+      const restoreMatch = url.pathname.match(/^\/api\/galleries\/([^/]+)\/restore$/);
+      if (restoreMatch && request.method === "POST") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(restoreMatch[1]);
+        const stored = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!stored) return json({ error: "Gallery not found" }, 404, origin);
+        const gallery = await stored.json<Record<string, any>>();
+        delete gallery.deletedAt;
         gallery.updatedAt = new Date().toISOString();
         await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), {
           httpMetadata: { contentType: "application/json" },
@@ -620,20 +810,17 @@ export default {
         if (!slug) return json({ error: "Invalid slug" }, 400, origin);
         const stored = await env.MEDIA.get(`galleries/${slug}.json`);
         if (!stored) return json({ error: "Gallery not found" }, 404, origin);
-        const gallery = await stored.json<{
-          media?: Array<{ assetId?: string }>;
-        }>();
-        const assetIds = [
-          ...new Set(
-            (gallery.media || [])
-              .map(({ assetId }) => assetId)
-              .filter((id): id is string => Boolean(id)),
-          ),
-        ];
-        await Promise.all(assetIds.map((id) => deleteMuxAsset(env, id)));
-        await deleteR2Prefix(env.MEDIA, `couples/${slug}/`);
-        await env.MEDIA.delete(`galleries/${slug}.json`);
-        return json({ ok: true }, 200, origin);
+        const gallery = await stored.json<Record<string, any>>();
+        if (url.searchParams.get("permanent") === "true") {
+          await permanentlyDeleteGallery(env, slug, gallery);
+          return json({ ok: true, permanent: true }, 200, origin);
+        }
+        gallery.deletedAt = new Date().toISOString();
+        gallery.published = false;
+        await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), {
+          httpMetadata: { contentType: "application/json" },
+        });
+        return json({ ok: true, recoverableUntil: new Date(Date.now() + 30 * 86400000).toISOString() }, 200, origin);
       }
       if (url.pathname === "/api/download" && request.method === "GET") {
         const key = url.searchParams.get("key") || "";
@@ -678,6 +865,14 @@ export default {
     }
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(auditStorage(env, true));
+    ctx.waitUntil((async () => {
+      await auditStorage(env, true);
+      const galleries = await loadAllGalleries(env);
+      const cutoff = Date.now() - 30 * 86400000;
+      for (const gallery of galleries) {
+        if (gallery.value.deletedAt && Date.parse(gallery.value.deletedAt) < cutoff)
+          await permanentlyDeleteGallery(env, safeSlug(gallery.value.slug), gallery.value);
+      }
+    })());
   },
 } satisfies ExportedHandler<Env>;
