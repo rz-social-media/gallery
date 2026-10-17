@@ -15,6 +15,34 @@ body:has(.gm-login) {
   background: #f2eee6;
   color: #211e1a;
 }
+.gm button,
+.gm-login button,
+.gm .upload {
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+.gm button:focus-visible,
+.gm-login button:focus-visible,
+.gm .upload:focus-within {
+  outline: 3px solid rgba(98, 50, 59, 0.28);
+  outline-offset: 3px;
+}
+.gm button:active:not(:disabled),
+.gm-login button:active:not(:disabled),
+.gm .upload:active {
+  transform: translateY(0) scale(0.98);
+}
+.gm button:disabled,
+.gm-login button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .gm-login {
   min-height: 100vh;
   display: grid;
@@ -88,6 +116,13 @@ body:has(.gm-login) {
 .gm-login button {
   width: 100%;
 }
+.gm-login button:hover:not(:disabled),
+.gm-title > button:hover:not(:disabled),
+.gm .primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #7a3e49;
+  box-shadow: 0 10px 24px rgba(71, 34, 41, 0.22);
+}
 .gm-login span {
   display: block;
   font-size: 0.65rem;
@@ -116,6 +151,16 @@ body:has(.gm-login) {
   background: transparent;
   color: #443e37;
   padding: 0.7rem;
+}
+.gm > header button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #eee7dc;
+  color: #211e1a;
+}
+.gm > header .primary:hover:not(:disabled) {
+  background: #7a3e49;
+  color: white;
+  box-shadow: 0 8px 20px rgba(71, 34, 41, 0.2);
 }
 .gm > header .primary {
   margin: 0;
@@ -155,6 +200,14 @@ body:has(.gm-login) {
   border: 0;
   text-align: left;
   padding: 0 0 1.2rem;
+  overflow: hidden;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+.gm-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 38px rgba(61, 48, 37, 0.16);
 }
 .gm-card > div {
   aspect-ratio: 4/3;
@@ -165,6 +218,10 @@ body:has(.gm-login) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 260ms ease;
+}
+.gm-card:hover img {
+  transform: scale(1.025);
 }
 .gm-card span {
   position: absolute;
@@ -231,6 +288,12 @@ body:has(.gm-login) {
   padding: 0.8rem 1rem;
   cursor: pointer;
 }
+.upload:hover {
+  transform: translateY(-2px);
+  border-color: #8f7b67;
+  background: #f7f0e7;
+  box-shadow: 0 8px 18px rgba(61, 48, 37, 0.11);
+}
 .gm-photos {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -263,6 +326,11 @@ body:has(.gm-login) {
   border: 0;
   width: 28px;
   height: 28px;
+}
+.gm-photos button:hover,
+.film button:hover {
+  background: #62323b;
+  color: white;
 }
 .film-form {
   display: grid;
