@@ -217,7 +217,29 @@ function Editor({
 }) {
   const [uploading, setUploading] = useState<string | null>(null),
     [progress, setProgress] = useState(0),
+    [uploadStage, setUploadStage] = useState<"uploading" | "processing">(
+      "uploading",
+    ),
+    [processingStartedAt, setProcessingStartedAt] = useState<number | null>(
+      null,
+    ),
+    [elapsedSeconds, setElapsedSeconds] = useState(0),
+    [muxProgress, setMuxProgress] = useState<{
+      state: string | null;
+      percentage: number | null;
+    }>({ state: null, percentage: null }),
     [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    if (!processingStartedAt) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const update = () =>
+      setElapsedSeconds(Math.floor((Date.now() - processingStartedAt) / 1000));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [processingStartedAt]);
   const set = (k: keyof Gallery, v: any) => change({ ...gallery, [k]: v });
   async function deleteGallery() {
     if (!gallery.slug) return;
@@ -295,6 +317,9 @@ function Editor({
     for (const file of files) {
       setUploading(file.name);
       setProgress(0);
+      setUploadStage("uploading");
+      setProcessingStartedAt(null);
+      setMuxProgress({ state: null, percentage: null });
       try {
         if (file.type.startsWith("image/")) {
           const originalKey = await signed(file, file.name, "photo", slug),
@@ -317,6 +342,8 @@ function Editor({
           change({ ...gallery, slug, media: [...nextMedia] });
         } else if (file.type.startsWith("video/")) {
           const originalKey = await signed(file, file.name, "video", slug);
+          setUploadStage("processing");
+          setProcessingStartedAt(Date.now());
           const created = await fetch(`${API}/api/videos`, {
             method: "POST",
             headers: {
@@ -334,6 +361,10 @@ function Editor({
             state = await fetch(`${API}/api/videos/${created.assetId}`, {
               headers: { Authorization: `Bearer ${code}` },
             }).then((r) => r.json());
+            setMuxProgress({
+              state: state.progressState,
+              percentage: state.progressPercentage,
+            });
             if (state.status === "ready") break;
             await new Promise((r) => setTimeout(r, 5000));
           }
@@ -357,6 +388,9 @@ function Editor({
     }
     setUploading(null);
     setProgress(0);
+    setUploadStage("uploading");
+    setProcessingStartedAt(null);
+    setMuxProgress({ state: null, percentage: null });
   }
   return (
     <main className="gm">
@@ -434,10 +468,37 @@ function Editor({
             </label>
           </div>
           {uploading && (
-            <div className="upload-progress">
-              <strong>{uploading}</strong>
-              <span>{progress}%</span>
-              <i style={{ width: `${progress}%` }} />
+            <div
+              className={`upload-progress ${uploadStage === "processing" ? "is-processing" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {uploadStage === "processing" ? (
+                <>
+                  <b className="processing-spinner" aria-hidden="true" />
+                  <div>
+                    <strong>Processing film for streaming…</strong>
+                    <small>
+                      {uploading} · {formatElapsed(elapsedSeconds)} elapsed
+                      {muxProgress.state
+                        ? ` · ${formatMuxState(muxProgress.state)}`
+                        : ""}
+                      {muxProgress.percentage !== null &&
+                      muxProgress.percentage > 0 &&
+                      muxProgress.percentage < 100
+                        ? ` · ${Math.round(muxProgress.percentage)}%`
+                        : ""}
+                    </small>
+                    <small>Usually ready within a few minutes</small>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <strong>{uploading}</strong>
+                  <span>{progress}%</span>
+                  <i style={{ width: `${progress}%` }} />
+                </>
+              )}
             </div>
           )}
           <div className="gm-photos">
@@ -528,4 +589,16 @@ async function resize(file: File) {
       0.86,
     ),
   );
+}
+
+function formatElapsed(seconds: number) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function formatMuxState(state: string) {
+  return state === "transcoding"
+    ? "Transcoding"
+    : state === "ingesting"
+      ? "Preparing"
+      : "Processing";
 }

@@ -178,6 +178,11 @@ export default {
           {
             assetId: asset.id,
             status: asset.status,
+            progressState: asset.progress?.state || null,
+            progressPercentage:
+              typeof asset.progress?.percentage === "number"
+                ? asset.progress.percentage
+                : null,
             playbackId: asset.playback_ids?.[0]?.id || null,
             downloadReady:
               asset.static_renditions?.files?.some(

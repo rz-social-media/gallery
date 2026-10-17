@@ -1,7 +1,7 @@
-:HL["/gallery/_next/static/chunks/0lwfs64ok2l.i.css","style"]
+:HL["/gallery/_next/static/chunks/09mpg4rr0.bqj.css","style"]
 :HL["/gallery/fonts/meno-display-light.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/meno-display.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/images/jasmin-daniel-hero.jpg","image"]
 :HL["/gallery/images/jasmin-teaser-cover.jpg","image"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"h6xt2kK6iRLZJ9Y1OdDP_"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"6h1GvnyioN7A1n_nrYItq"}

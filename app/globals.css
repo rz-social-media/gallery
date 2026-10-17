@@ -444,6 +444,37 @@ body:has(.gm-login) {
   background: #6b3440;
   transition: width 0.2s;
 }
+.upload-progress.is-processing {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 64px;
+  overflow: visible;
+}
+.upload-progress.is-processing strong,
+.upload-progress.is-processing small {
+  display: block;
+}
+.upload-progress.is-processing small {
+  margin-top: 0.3rem;
+  color: #756d64;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.processing-spinner {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border: 3px solid #d7c8bd;
+  border-top-color: #6b3440;
+  border-radius: 50%;
+  animation: manager-spin 0.8s linear infinite;
+}
+@keyframes manager-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .original-download,
 .video-download {
   position: absolute;
