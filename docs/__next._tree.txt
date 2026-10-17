@@ -4,4 +4,4 @@
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/images/jasmin-daniel-hero.jpg","image"]
 :HL["/gallery/images/jasmin-teaser-cover.jpg","image"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"Nts2ZLQaovUrk8Cky9ZBK"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"iXz4y0TF_KtgGJuNN_xFw"}

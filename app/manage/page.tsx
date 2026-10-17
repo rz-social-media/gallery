@@ -1,4 +1,5 @@
 "use client";
+import { createSHA256 } from "hash-wasm";
 import { useEffect, useRef, useState } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
@@ -14,6 +15,7 @@ type Media = {
   assetId?: string;
   posterUrl?: string;
   filename: string;
+  sha256?: string;
 };
 type Gallery = {
   slug: string;
@@ -434,6 +436,7 @@ function Editor({
     filename: string,
     kind: string,
     slug: string,
+    sha256: string,
   ) {
     const response = await fetch(`${API}/api/uploads`, {
       method: "POST",
@@ -446,10 +449,12 @@ function Editor({
         filename,
         contentType: file.type || "application/octet-stream",
         kind,
+        sha256,
       }),
     });
     if (!response.ok) throw new Error("Could not prepare upload");
     const data = await response.json();
+    if (data.exists) return data.key as string;
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", data.uploadUrl);
@@ -471,6 +476,16 @@ function Editor({
     });
     return data.key;
   }
+  async function fingerprint(file: Blob) {
+    const hash = await createSHA256();
+    hash.init();
+    const chunkSize = 8 * 1024 * 1024;
+    for (let offset = 0; offset < file.size; offset += chunkSize) {
+      const chunk = await file.slice(offset, offset + chunkSize).arrayBuffer();
+      hash.update(new Uint8Array(chunk));
+    }
+    return hash.digest("hex");
+  }
   async function addFiles(files: File[]) {
     if (uploading || !files.length) return;
     const slug =
@@ -482,14 +497,23 @@ function Editor({
       setUploadStage("uploading");
       setProcessingStartedAt(null);
       try {
+        const sha256 = await fingerprint(file);
+        if (
+          galleryRef.current.media.some(
+            (item) => item.type === (file.type.startsWith("image/") ? "photo" : "video") && item.sha256 === sha256,
+          )
+        )
+          continue;
         if (file.type.startsWith("image/")) {
-          const originalKey = await signed(file, file.name, "photo", slug),
+          const originalKey = await signed(file, file.name, "photo", slug, sha256),
             web = await resize(file),
+            webSha256 = await fingerprint(web),
             webKey = await signed(
               web,
               `${file.name}.web.jpg`,
               "photo-web",
               slug,
+              webSha256,
             );
           const media = [
             ...galleryRef.current.media,
@@ -499,6 +523,7 @@ function Editor({
               title: "",
               alt: file.name,
               filename: file.name,
+              sha256,
               originalKey,
               url: `${API}/media/${webKey}`,
             },
@@ -508,15 +533,17 @@ function Editor({
           change(updated);
           await persist(updated);
         } else if (file.type.startsWith("video/")) {
-          const originalKey = await signed(file, file.name, "video", slug);
+          const originalKey = await signed(file, file.name, "video", slug, sha256);
           setUploadStage("processing");
           setProcessingStartedAt(Date.now());
           const poster = await createVideoPoster(file);
+          const posterSha256 = await fingerprint(poster);
           const posterKey = await signed(
             poster,
             `${file.name}.poster.jpg`,
             "video-poster",
             slug,
+            posterSha256,
           );
           const media = [
             ...galleryRef.current.media,
@@ -526,6 +553,7 @@ function Editor({
               title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
               alt: "",
               filename: file.name,
+              sha256,
               originalKey,
               posterUrl: `${API}/media/${posterKey}`,
             },
