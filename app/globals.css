@@ -858,6 +858,17 @@ body {
   font-family: "Vogue Avant Garde", Arial, sans-serif;
 }
 
+button,
+a[href],
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 html:has(.photo-story),
 body:has(.photo-story) {
   overflow: auto;
