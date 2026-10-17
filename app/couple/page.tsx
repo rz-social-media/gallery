@@ -38,6 +38,9 @@ export default function CoupleGallery() {
   const [activeFilm, setActiveFilm] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [sharePreparing, setSharePreparing] = useState(false);
+  const [downloadFeedback, setDownloadFeedback] = useState<"idle" | "preparing" | "started">("idle");
+  const [sharedPhotoIds, setSharedPhotoIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1);
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const wheelLocked = useRef(false);
@@ -46,7 +49,15 @@ export default function CoupleGallery() {
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("id");
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    setSharedPhotoIds((params.get("photos") || "").split(",").filter(Boolean).slice(0, 10));
+    const initialView = window.location.hash.replace("#", "");
+    if (initialView === "photos" || initialView === "films") {
+      window.history.replaceState({ view: "home" }, "", `${window.location.pathname}${window.location.search}`);
+      window.history.pushState({ view: initialView }, "", `#${initialView}`);
+      setView(initialView);
+    }
     if (!id) {
       setError("Gallery link is incomplete.");
       return;
@@ -111,7 +122,10 @@ export default function CoupleGallery() {
         <span className="visually-hidden">Loading gallery</span>
       </main>
     );
-  const photos = gallery.media.filter((m) => m.type === "photo" && m.url);
+  const allPhotos = gallery.media.filter((m) => m.type === "photo" && m.url);
+  const photos = sharedPhotoIds.length
+    ? allPhotos.filter((photo) => sharedPhotoIds.includes(photo.id))
+    : allPhotos;
   const films = gallery.media.filter((m) => m.type === "video" && m.playbackId);
   const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
   const automaticCover =
@@ -128,10 +142,13 @@ export default function CoupleGallery() {
       : "none",
     "--gallery-cover-phone": phoneCover ? `url("${phoneCover}")` : "none",
   } as CSSProperties;
+  const sharedIdsSuffix = sharedPhotoIds.length
+    ? `&ids=${encodeURIComponent(sharedPhotoIds.join(","))}`
+    : "";
   const downloadUrl = (type: "all" | "photos" | "videos") =>
-    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}`;
+    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
   const mobileDownloadUrl = (type: "all" | "photos" | "videos") =>
-    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}`;
+    `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
   const adaptDownload = (
     event: ReactMouseEvent<HTMLAnchorElement>,
     type: "all" | "photos" | "videos",
@@ -144,6 +161,17 @@ export default function CoupleGallery() {
       window.location.href = mobileDownloadUrl(type);
     }
   };
+  const showDownloadFeedback = () => {
+    setDownloadFeedback("preparing");
+    window.setTimeout(() => setDownloadFeedback("started"), 650);
+    window.setTimeout(() => setDownloadFeedback("idle"), 2800);
+  };
+  const downloadLabel = (fallback: string) =>
+    downloadFeedback === "preparing"
+      ? "Preparing download…"
+      : downloadFeedback === "started"
+        ? "Download started"
+        : fallback;
   const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${gallery.updatedAt ? `?v=${encodeURIComponent(gallery.updatedAt)}` : ""}`;
   const shareGallery = async () => {
     if (navigator.share) {
@@ -152,6 +180,52 @@ export default function CoupleGallery() {
     }
     await navigator.clipboard.writeText(shareUrl);
     window.alert("Gallery link copied");
+  };
+  const shareSelectedPhotos = async () => {
+    const selected = photos.filter((photo) => selectedPhotos.includes(photo.id)).slice(0, 10);
+    if (!selected.length) return;
+    setSharePreparing(true);
+    try {
+      const files = await Promise.all(
+        selected.map(async (photo) => {
+          const response = await fetch(`${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`);
+          if (!response.ok) throw new Error("Could not prepare photo");
+          const blob = await response.blob();
+          return new File([blob], photo.filename, { type: blob.type || "image/jpeg" });
+        }),
+      );
+      if (navigator.share && navigator.canShare?.({ files })) {
+        await navigator.share({ files, title: `${names} photos` });
+        return;
+      }
+      const selectedUrl = new URL(window.location.href);
+      selectedUrl.hash = "photos";
+      selectedUrl.searchParams.set("id", gallery.slug);
+      selectedUrl.searchParams.set("photos", selected.map((photo) => photo.id).join(","));
+      await navigator.clipboard.writeText(selectedUrl.href);
+      window.alert("Selected photos link copied");
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        window.alert("Could not prepare the selected photos. Please try fewer photos.");
+    } finally {
+      setSharePreparing(false);
+    }
+  };
+  const savePhotoToDevice = async (photo: Media) => {
+    try {
+      const response = await fetch(`${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`);
+      if (!response.ok) throw new Error("Could not prepare photo");
+      const blob = await response.blob();
+      const file = new File([blob], photo.filename, { type: blob.type || "image/jpeg" });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+      window.location.href = `${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`;
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        window.location.href = `${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`;
+    }
   };
   const openPhoto = (index: number) => {
     setZoom(1);
@@ -193,9 +267,9 @@ export default function CoupleGallery() {
             <a
               className="page-download-all"
               href={downloadUrl("photos")}
-              onClick={(event) => adaptDownload(event, "photos")}
+              onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "photos"); }}
             >
-              <Icon name="download" /> Download all photos
+              <Icon name="download" /> {downloadLabel("Download all photos")}
             </a>
           </div>
         </section>
@@ -212,20 +286,25 @@ export default function CoupleGallery() {
                 : [...current, id],
             )
           }
+          savePhoto={savePhotoToDevice}
         />
         {selectionMode && selectedPhotos.length > 0 && (
           <aside className="selection-tray">
             <span>{selectedPhotos.length} selected</span>
+            <button onClick={() => void shareSelectedPhotos()} disabled={sharePreparing}>
+              <Icon name="share" /> {sharePreparing ? "Preparing share…" : "Share selected"}
+            </button>
             <a
               href={`${downloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`}
               onClick={(event) => {
+                showDownloadFeedback();
                 if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760) {
                   event.preventDefault();
                   window.location.href = `${mobileDownloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`;
                 }
               }}
             >
-              <Icon name="download" /> Download selected
+              <Icon name="download" /> {downloadLabel("Download selected")}
             </a>
           </aside>
         )}
@@ -401,9 +480,9 @@ export default function CoupleGallery() {
             <a
               className="page-download-all header-download-all"
               href={downloadUrl("videos")}
-              onClick={(event) => adaptDownload(event, "videos")}
+              onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "videos"); }}
             >
-              <Icon name="download" /> Download all films
+              <Icon name="download" /> {downloadLabel("Download all films")}
             </a>
           }
         />
@@ -497,9 +576,9 @@ export default function CoupleGallery() {
         <a
           className="home-top-download"
           href={downloadUrl("all")}
-          onClick={(event) => adaptDownload(event, "all")}
+          onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "all"); }}
         >
-          <Icon name="download" /> Download all
+          <Icon name="download" /> {downloadLabel("Download all")}
         </a>
       </header>
       <section>
@@ -532,6 +611,7 @@ function JustifiedPhotoGrid({
   selectionMode,
   selectedPhotos,
   togglePhoto,
+  savePhoto,
 }: {
   photos: Media[];
   names: string;
@@ -539,6 +619,7 @@ function JustifiedPhotoGrid({
   selectionMode: boolean;
   selectedPhotos: string[];
   togglePhoto: (id: string) => void;
+  savePhoto: (photo: Media) => Promise<void>;
 }) {
   const container = useRef<HTMLElement | null>(null);
   const [width, setWidth] = useState(1200);
@@ -611,6 +692,12 @@ function JustifiedPhotoGrid({
                 href={`${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`}
                 aria-label={`Download ${photo.filename}`}
                 title="Download photo"
+                onClick={(event) => {
+                  if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760) {
+                    event.preventDefault();
+                    void savePhoto(photo);
+                  }
+                }}
               >
                 ↓
               </a>
