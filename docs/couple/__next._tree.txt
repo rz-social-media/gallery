@@ -1,5 +1,5 @@
-:HL["/gallery/_next/static/chunks/0hl3lc~h-9bhu.css","style"]
+:HL["/gallery/_next/static/chunks/0xrwsobock6qf.css","style"]
 :HL["/gallery/fonts/meno-display-light.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/meno-display.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"couple","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"D3hV7Y1OD4_eLRHSenLIX"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"couple","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"RJ-M1rxAAwIlG9I1a_MWR"}
