@@ -294,6 +294,40 @@ body:has(.gm-login) {
   background: #f7f0e7;
   box-shadow: 0 8px 18px rgba(61, 48, 37, 0.11);
 }
+.media-dropzone {
+  min-height: 112px;
+  margin: 0 0 1.5rem;
+  border: 1px dashed #b9aa98;
+  background: #f7f2ea;
+  display: grid;
+  place-content: center;
+  gap: 0.35rem;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.media-dropzone strong {
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+.media-dropzone span {
+  color: #756d64;
+  font-size: 0.7rem;
+}
+.media-dropzone:hover,
+.media-dropzone.is-active {
+  border-color: #6b3440;
+  background: #eee3dd;
+  transform: translateY(-2px);
+}
+.media-dropzone.is-busy {
+  cursor: wait;
+  opacity: 0.65;
+}
 .gm-photos {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -303,6 +337,11 @@ body:has(.gm-login) {
   margin: 0;
   aspect-ratio: 1;
   position: relative;
+  cursor: grab;
+}
+.gm-photos figure:active,
+.film:active {
+  cursor: grabbing;
 }
 .gm-photos img {
   width: 100%;
@@ -345,31 +384,117 @@ body:has(.gm-login) {
 .film {
   border-top: 1px solid #ddd4c8;
   padding: 1rem 0;
-}
-.film.is-processing {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 120px 1fr auto;
   align-items: center;
-  column-gap: 0.7rem;
+  gap: 1rem;
+  cursor: grab;
 }
-.film.is-processing .processing-spinner {
-  grid-row: 1 / span 2;
-  width: 22px;
-  height: 22px;
+.film-poster {
+  aspect-ratio: 16 / 9;
+  background: #e5ddd2;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
-.film.is-processing small {
-  grid-column: 2;
+.film-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.film-copy strong,
+.film-copy small {
+  display: block;
+}
+.film-copy input {
+  margin: 0;
+  padding: 0.5rem 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  font-family: Georgia, serif;
+  font-size: 1.1rem;
+}
+.film-copy input:hover,
+.film-copy input:focus {
+  border-bottom-color: #9d8a78;
+  outline: 0;
+}
+.film-copy small {
   margin-top: 0.2rem;
   color: #756d64;
   letter-spacing: 0;
   text-transform: none;
 }
-.film.is-processing button {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+.film-actions {
+  display: flex;
+  gap: 0.5rem;
 }
-.film button {
-  float: right;
+.film-actions button {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #cfc4b5;
+  background: white;
+}
+.cover-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  padding: 1rem;
+  display: grid;
+  place-items: center;
+  background: rgba(25, 20, 17, 0.72);
+}
+.cover-picker > section {
+  width: min(760px, 100%);
+  max-height: min(720px, 90vh);
+  overflow: auto;
+  padding: clamp(1.3rem, 4vw, 2.4rem);
+  background: #fffdf8;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+}
+.cover-picker > section > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+.cover-picker h2 {
+  margin: 0.35rem 0 1.4rem;
+  font-family: Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+}
+.cover-picker > section > div:first-child > button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: #eee8df;
+}
+.cover-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.65rem;
+}
+.cover-options button {
+  padding: 0;
+  border: 3px solid transparent;
+  aspect-ratio: 1;
+  background: #e6ded3;
+  overflow: hidden;
+}
+.cover-options button:hover {
+  border-color: #6b3440;
+  transform: translateY(-2px);
+}
+.cover-options img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.automatic-cover {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #cfc4b5;
+  background: white;
 }
 .gm-edit aside {
   position: fixed;
@@ -434,6 +559,15 @@ body:has(.gm-login) {
   }
   .gm-photos {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .film {
+    grid-template-columns: 92px 1fr;
+  }
+  .film-actions {
+    grid-column: 1 / -1;
+  }
+  .cover-options {
+    grid-template-columns: repeat(3, 1fr);
   }
   .gm-login form {
     padding: 2rem;

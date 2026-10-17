@@ -12,6 +12,7 @@ type Media = {
   originalKey: string;
   playbackId?: string;
   assetId?: string;
+  posterUrl?: string;
   filename: string;
 };
 type Gallery = {
@@ -229,6 +230,9 @@ function Editor({
       percentage: number | null;
     }>({ state: null, percentage: null }),
     [videoStates, setVideoStates] = useState<Record<string, string>>({}),
+    [dropActive, setDropActive] = useState(false),
+    [draggedMediaId, setDraggedMediaId] = useState<string | null>(null),
+    [coverFor, setCoverFor] = useState<string | null>(null),
     [deleting, setDeleting] = useState(false);
   const galleryRef = useRef(gallery);
   useEffect(() => {
@@ -322,6 +326,36 @@ function Editor({
     });
     if (!response.ok) throw new Error("Could not save gallery progress");
   }
+  async function updateMedia(media: Media[]) {
+    const updated = { ...galleryRef.current, media };
+    galleryRef.current = updated;
+    change(updated);
+    if (updated.slug) {
+      try {
+        await persist(updated);
+      } catch (error) {
+        alert((error as Error).message);
+      }
+    }
+  }
+  function moveMedia(targetId: string) {
+    if (!draggedMediaId || draggedMediaId === targetId) return;
+    const media = [...galleryRef.current.media],
+      from = media.findIndex((item) => item.id === draggedMediaId),
+      to = media.findIndex((item) => item.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = media.splice(from, 1);
+    media.splice(to, 0, moved);
+    setDraggedMediaId(null);
+    void updateMedia(media);
+  }
+  function selectVideoCover(videoId: string, posterUrl?: string) {
+    const media = galleryRef.current.media.map((item) =>
+      item.id === videoId ? { ...item, posterUrl } : item,
+    );
+    setCoverFor(null);
+    void updateMedia(media);
+  }
   async function deleteGallery() {
     if (!gallery.slug) return;
     const names =
@@ -391,10 +425,10 @@ function Editor({
     return data.key;
   }
   async function addFiles(files: File[]) {
+    if (uploading || !files.length) return;
     const slug =
       gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
     if (!slug) return alert("Add both names first");
-    const nextMedia = [...gallery.media];
     for (const file of files) {
       setUploading(file.name);
       setProgress(0);
@@ -411,16 +445,19 @@ function Editor({
               "photo-web",
               slug,
             );
-          nextMedia.push({
-            id: crypto.randomUUID(),
-            type: "photo",
-            title: "",
-            alt: file.name,
-            filename: file.name,
-            originalKey,
-            url: `${API}/media/${webKey}`,
-          });
-          const updated = { ...galleryRef.current, slug, media: [...nextMedia] };
+          const media = [
+            ...galleryRef.current.media,
+            {
+              id: crypto.randomUUID(),
+              type: "photo" as const,
+              title: "",
+              alt: file.name,
+              filename: file.name,
+              originalKey,
+              url: `${API}/media/${webKey}`,
+            },
+          ];
+          const updated = { ...galleryRef.current, slug, media };
           galleryRef.current = updated;
           change(updated);
           await persist(updated);
@@ -443,16 +480,19 @@ function Editor({
           const created = await createdResponse.json();
           if (!createdResponse.ok)
             throw new Error(created.error || "Could not start film processing");
-          nextMedia.push({
-            id: crypto.randomUUID(),
-            type: "video",
-            title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
-            alt: "",
-            filename: file.name,
-            originalKey,
-            assetId: created.assetId,
-          });
-          const updated = { ...galleryRef.current, slug, media: [...nextMedia] };
+          const media = [
+            ...galleryRef.current.media,
+            {
+              id: crypto.randomUUID(),
+              type: "video" as const,
+              title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
+              alt: "",
+              filename: file.name,
+              originalKey,
+              assetId: created.assetId,
+            },
+          ];
+          const updated = { ...galleryRef.current, slug, media };
           galleryRef.current = updated;
           change(updated);
           await persist(updated);
@@ -531,24 +571,44 @@ function Editor({
               <small>01</small>
               <h2>Photos & films</h2>
             </div>
-            <label className="upload">
-              Upload files
-              <input
-                hidden
-                multiple
-                type="file"
-                accept="image/*,video/*"
-                onClick={(e) => {
-                  e.currentTarget.value = "";
-                }}
-                onChange={(e) => {
-                  const files = [...(e.currentTarget.files || [])];
-                  e.currentTarget.value = "";
-                  if (files.length) void addFiles(files);
-                }}
-              />
-            </label>
           </div>
+          <label
+            className={`media-dropzone ${dropActive ? "is-active" : ""} ${uploading ? "is-busy" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDropActive(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node))
+                setDropActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropActive(false);
+              if (!uploading) void addFiles([...event.dataTransfer.files]);
+            }}
+          >
+            <strong>
+              {uploading ? "Upload in progress…" : "Drop photos & films here"}
+            </strong>
+            <span>or click once to choose files</span>
+            <input
+              hidden
+              multiple
+              type="file"
+              disabled={Boolean(uploading)}
+              accept="image/*,video/*"
+              onClick={(e) => {
+                e.currentTarget.value = "";
+              }}
+              onChange={(e) => {
+                const files = [...(e.currentTarget.files || [])];
+                e.currentTarget.value = "";
+                if (files.length) void addFiles(files);
+              }}
+            />
+          </label>
           {uploading && (
             <div
               className={`upload-progress ${uploadStage === "processing" ? "is-processing" : ""}`}
@@ -587,16 +647,25 @@ function Editor({
             {gallery.media
               .filter((x) => x.type === "photo")
               .map((p, i) => (
-                <figure key={p.id}>
+                <figure
+                  key={p.id}
+                  draggable
+                  onDragStart={() => setDraggedMediaId(p.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => moveMedia(p.id)}
+                  title="Drag to reorder"
+                >
                   <img src={p.url} />
                   {i === 0 && <span>Cover</span>}
                   <button
                     onClick={() =>
-                      set(
-                        "media",
-                        gallery.media.filter((x) => x.id !== p.id),
+                      void updateMedia(
+                        galleryRef.current.media.filter(
+                          (item) => item.id !== p.id,
+                        ),
                       )
                     }
+                    aria-label={`Remove ${p.filename}`}
                   >
                     ×
                   </button>
@@ -606,41 +675,111 @@ function Editor({
           {gallery.media
             .filter((x) => x.type === "video")
             .map((v) => (
-              <p
+              <div
                 className={`film ${!v.playbackId ? "is-processing" : ""}`}
                 key={v.id}
+                draggable
+                onDragStart={() => setDraggedMediaId(v.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => moveMedia(v.id)}
+                title="Drag to reorder"
               >
-                {!v.playbackId && (
-                  <b className="processing-spinner" aria-hidden="true" />
-                )}
-                {v.playbackId ? "▶" : ""} {v.title}
-                {!v.playbackId && (
-                  <small>
-                    {formatMuxState(videoStates[v.id] || "preparing")} in the
-                    background · Safe to close this page
-                  </small>
-                )}
-                <button
-                  onClick={() =>
-                    set(
-                      "media",
-                      gallery.media.filter((x) => x.id !== v.id),
-                    )
-                  }
-                >
-                  Remove
-                </button>
-              </p>
+                <div className="film-poster">
+                  {v.posterUrl ? (
+                    <img src={v.posterUrl} alt="" />
+                  ) : v.playbackId ? (
+                    <img
+                      src={`https://image.mux.com/${v.playbackId}/thumbnail.webp?width=360&fit_mode=smartcrop`}
+                      alt=""
+                    />
+                  ) : (
+                    <b className="processing-spinner" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="film-copy">
+                  <input
+                    aria-label="Film title"
+                    value={v.title}
+                    onChange={(event) => {
+                      const media = galleryRef.current.media.map((item) =>
+                        item.id === v.id
+                          ? { ...item, title: event.target.value }
+                          : item,
+                      );
+                      const updated = { ...galleryRef.current, media };
+                      galleryRef.current = updated;
+                      change(updated);
+                    }}
+                    onBlur={() => void persist(galleryRef.current)}
+                  />
+                  {!v.playbackId && (
+                    <small>
+                      {formatMuxState(videoStates[v.id] || "preparing")} in the
+                      background · Safe to close this page
+                    </small>
+                  )}
+                </div>
+                <div className="film-actions">
+                  <button onClick={() => setCoverFor(v.id)}>
+                    Choose cover
+                  </button>
+                  <button
+                    onClick={() =>
+                      void updateMedia(
+                        galleryRef.current.media.filter(
+                          (item) => item.id !== v.id,
+                        ),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
             ))}
         </article>
+        {coverFor && (
+          <div className="cover-picker" onClick={() => setCoverFor(null)}>
+            <section onClick={(event) => event.stopPropagation()}>
+              <div>
+                <div>
+                  <small>Film cover</small>
+                  <h2>Choose a photograph</h2>
+                </div>
+                <button onClick={() => setCoverFor(null)}>×</button>
+              </div>
+              <div className="cover-options">
+                {gallery.media
+                  .filter((item) => item.type === "photo" && item.url)
+                  .map((photo) => (
+                    <button
+                      key={photo.id}
+                      onClick={() => selectVideoCover(coverFor, photo.url)}
+                    >
+                      <img src={photo.url} alt={photo.alt} />
+                    </button>
+                  ))}
+              </div>
+              {!gallery.media.some(
+                (item) => item.type === "photo" && item.url,
+              ) && <p>Upload a photograph first, then choose it here.</p>}
+              <button
+                className="automatic-cover"
+                onClick={() => selectVideoCover(coverFor)}
+              >
+                Use automatic film thumbnail
+              </button>
+            </section>
+          </div>
+        )}
         {gallery.slug && (
           <article className="danger-zone">
             <div>
               <small>Permanent action</small>
               <h2>Delete this gallery</h2>
               <p>
-                Remove the gallery and all of its uploaded photos and films
-                from storage.
+                Remove the gallery and all of its uploaded photos and films from
+                storage.
               </p>
             </div>
             <button
