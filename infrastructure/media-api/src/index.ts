@@ -116,6 +116,19 @@ function galleryReferences(
   const sourceWithReferencedAsset = new Set<string>();
   for (const { value: gallery } of galleries) {
     const slug = safeSlug(String(gallery.slug || ""));
+    for (const field of ["computerCoverUrl", "phoneCoverUrl"]) {
+      const value = gallery[field];
+      if (typeof value !== "string") continue;
+      try {
+        const marker = "/media/";
+        const pathname = new URL(value).pathname;
+        const index = pathname.indexOf(marker);
+        if (index >= 0)
+          r2.add(decodeURIComponent(pathname.slice(index + marker.length)));
+      } catch {
+        // Invalid cover metadata is never treated as permission to delete.
+      }
+    }
     for (const item of Array.isArray(gallery.media) ? gallery.media : []) {
       for (const field of ["originalKey", "webKey", "posterKey"]) {
         const key = item[field];
