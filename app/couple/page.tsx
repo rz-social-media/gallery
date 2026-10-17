@@ -103,9 +103,12 @@ export default function CoupleGallery() {
     );
   if (!gallery)
     return (
-      <main className="dynamic-message">
-        <span className="brand-seal">RZ</span>
-        <p>Preparing your gallery…</p>
+      <main className="gallery-loading-screen" aria-label="Loading gallery">
+        <span className="gallery-loading-mark" aria-hidden="true">
+          <span>RZ</span>
+          <span>RZ</span>
+        </span>
+        <span className="visually-hidden">Loading gallery</span>
       </main>
     );
   const photos = gallery.media.filter((m) => m.type === "photo" && m.url);
