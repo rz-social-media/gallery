@@ -1,7 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -23,6 +23,7 @@ type Gallery = {
   partnerTwo: string;
   location: string;
   weddingDate: string;
+  updatedAt?: string;
   note: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
@@ -35,8 +36,14 @@ export default function CoupleGallery() {
   const [view, setView] = useState<"home" | "photos" | "films">("home");
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const [activeFilm, setActiveFilm] = useState<number | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
   const wheelLocked = useRef(false);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const touchPoints = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("id");
@@ -123,7 +130,7 @@ export default function CoupleGallery() {
   const mobileDownloadUrl = (type: "all" | "photos" | "videos") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}`;
   const adaptDownload = (
-    event: React.MouseEvent<HTMLAnchorElement>,
+    event: ReactMouseEvent<HTMLAnchorElement>,
     type: "all" | "photos" | "videos",
   ) => {
     if (
@@ -133,6 +140,20 @@ export default function CoupleGallery() {
       event.preventDefault();
       window.location.href = mobileDownloadUrl(type);
     }
+  };
+  const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${gallery.updatedAt ? `?v=${encodeURIComponent(gallery.updatedAt)}` : ""}`;
+  const shareGallery = async () => {
+    if (navigator.share) {
+      await navigator.share({ title: names, text: `${names} wedding gallery`, url: shareUrl });
+      return;
+    }
+    await navigator.clipboard.writeText(shareUrl);
+    window.alert("Gallery link copied");
+  };
+  const openPhoto = (index: number) => {
+    setZoom(1);
+    setActivePhoto(index);
+    if (!sessionStorage.getItem("rz-swipe-hint")) setShowSwipeHint(true);
   };
   const openView = (next: "photos" | "films") => {
     window.history.pushState({ view: next }, "", `#${next}`);
@@ -158,19 +179,55 @@ export default function CoupleGallery() {
           <small>A wedding in photographs</small>
           <h1>{names}</h1>
           <p>{gallery.location}</p>
-          <a
-            className="page-download-all"
-            href={downloadUrl("photos")}
-            onClick={(event) => adaptDownload(event, "photos")}
-          >
-            Download all photos ↓
-          </a>
+          <div className="photo-page-actions">
+            <button
+              className={selectionMode ? "is-active" : ""}
+              onClick={() => {
+                setSelectionMode((current) => !current);
+                setSelectedPhotos([]);
+              }}
+            >
+              <Icon name="select" /> {selectionMode ? "Cancel selection" : "Select photos"}
+            </button>
+            <a
+              className="page-download-all"
+              href={downloadUrl("photos")}
+              onClick={(event) => adaptDownload(event, "photos")}
+            >
+              <Icon name="download" /> Download all photos
+            </a>
+          </div>
         </section>
         <JustifiedPhotoGrid
           photos={photos}
           names={names}
-          openPhoto={setActivePhoto}
+          openPhoto={openPhoto}
+          selectionMode={selectionMode}
+          selectedPhotos={selectedPhotos}
+          togglePhoto={(id) =>
+            setSelectedPhotos((current) =>
+              current.includes(id)
+                ? current.filter((item) => item !== id)
+                : [...current, id],
+            )
+          }
         />
+        {selectionMode && selectedPhotos.length > 0 && (
+          <aside className="selection-tray">
+            <span>{selectedPhotos.length} selected</span>
+            <a
+              href={`${downloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`}
+              onClick={(event) => {
+                if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760) {
+                  event.preventDefault();
+                  window.location.href = `${mobileDownloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`;
+                }
+              }}
+            >
+              <Icon name="download" /> Download selected
+            </a>
+          </aside>
+        )}
         {activePhoto !== null && (
           <div
             className="dynamic-lightbox"
@@ -195,16 +252,38 @@ export default function CoupleGallery() {
             }}
             onPointerDown={(event) => {
               if (event.pointerType === "mouse") return;
+              touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+              if (touchPoints.current.size === 2) {
+                const [first, second] = [...touchPoints.current.values()];
+                pinchStart.current = {
+                  distance: Math.hypot(second.x - first.x, second.y - first.y),
+                  zoom,
+                };
+              }
               swipeStart.current = { x: event.clientX, y: event.clientY };
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
+              if (touchPoints.current.has(event.pointerId))
+                touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+              if (touchPoints.current.size === 2 && pinchStart.current) {
+                const [first, second] = [...touchPoints.current.values()];
+                const distance = Math.hypot(second.x - first.x, second.y - first.y);
+                setZoom(Math.min(4, Math.max(1, pinchStart.current.zoom * distance / pinchStart.current.distance)));
+                setShowSwipeHint(false);
+                sessionStorage.setItem("rz-swipe-hint", "seen");
+                return;
+              }
+              if (zoom > 1) return;
               if (!swipeStart.current || event.pointerType === "mouse") return;
               const dx = event.clientX - swipeStart.current.x;
               const dy = event.clientY - swipeStart.current.y;
               if (Math.abs(dx) > Math.abs(dy)) setSwipeOffset(dx);
             }}
             onPointerUp={(event) => {
+              touchPoints.current.delete(event.pointerId);
+              if (touchPoints.current.size < 2) pinchStart.current = null;
+              if (zoom > 1) return;
               if (!swipeStart.current || event.pointerType === "mouse") return;
               const dx = event.clientX - swipeStart.current.x;
               const dy = event.clientY - swipeStart.current.y;
@@ -214,6 +293,8 @@ export default function CoupleGallery() {
               else setSwipeOffset(0);
             }}
             onPointerCancel={() => {
+              touchPoints.current.clear();
+              pinchStart.current = null;
               swipeStart.current = null;
               setSwipeOffset(0);
             }}
@@ -237,15 +318,37 @@ export default function CoupleGallery() {
             </button>
             <img
               onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setZoom((current) => (current > 1 ? 1 : 2.5));
+                setShowSwipeHint(false);
+                sessionStorage.setItem("rz-swipe-hint", "seen");
+              }}
               src={photos[activePhoto].url!}
               alt={photos[activePhoto].alt}
               draggable={false}
               style={{
-                transform: `translateX(${swipeOffset}px) scale(${swipeOffset ? 0.985 : 1})`,
+                transform: `translateX(${swipeOffset}px) scale(${zoom * (swipeOffset ? 0.985 : 1)})`,
                 opacity: swipeOffset ? Math.max(0.55, 1 - Math.abs(swipeOffset) / 500) : 1,
                 transition: swipeOffset ? "none" : undefined,
               }}
             />
+            {showSwipeHint && (
+              <button
+                className="swipe-hint"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowSwipeHint(false);
+                  sessionStorage.setItem("rz-swipe-hint", "seen");
+                }}
+              >
+                Swipe to explore · Double tap to zoom
+              </button>
+            )}
+            <div className="zoom-controls">
+              <button onClick={(event) => { event.stopPropagation(); setZoom((current) => Math.max(1, current - 0.5)); }} aria-label="Zoom out">−</button>
+              <button onClick={(event) => { event.stopPropagation(); setZoom((current) => Math.min(4, current + 0.5)); }} aria-label="Zoom in">＋</button>
+            </div>
             {[1, -1].map((offset) => {
               const preloadIndex =
                 (activePhoto + offset + photos.length) % photos.length;
@@ -280,6 +383,7 @@ export default function CoupleGallery() {
             </button>
           </div>
         )}
+        <MobileActionBar back={backHome} share={shareGallery} download={mobileDownloadUrl("photos")} />
       </main>
     );
   if (view === "films")
@@ -299,7 +403,7 @@ export default function CoupleGallery() {
             href={downloadUrl("videos")}
             onClick={(event) => adaptDownload(event, "videos")}
           >
-            Download all films ↓
+            <Icon name="download" /> Download all films
           </a>
         </section>
         <section className="dynamic-film-rail">
@@ -351,6 +455,7 @@ export default function CoupleGallery() {
             </div>
           </div>
         )}
+        <MobileActionBar back={backHome} share={shareGallery} download={mobileDownloadUrl("videos")} />
       </main>
     );
   return (
@@ -361,8 +466,14 @@ export default function CoupleGallery() {
       />
       <div className="dynamic-shade" />
       <header>
-        <span className="brand-seal">RZ</span>
-        <span>Private wedding gallery</span>
+        <div><span className="brand-seal">RZ</span><span>Private wedding gallery</span></div>
+        <a
+          className="home-top-download"
+          href={downloadUrl("all")}
+          onClick={(event) => adaptDownload(event, "all")}
+        >
+          <Icon name="download" /> Download all
+        </a>
       </header>
       <section>
         <small>Welcome to the wedding of</small>
@@ -371,23 +482,18 @@ export default function CoupleGallery() {
           <em>&</em>
           {gallery.partnerTwo}
         </h1>
-        <p>{gallery.note || gallery.location}</p>
+        <p>{gallery.note}</p>
+        <p className="gallery-meta">{[gallery.weddingDate, gallery.location].filter(Boolean).join(" · ")}</p>
         <div>
           <button disabled={!photos.length} onClick={() => openView("photos")}>
-            Photography <b>↗</b>
+            <Icon name="photo" /> <span>Photography<small>{photos.length} photos</small></span> <b>↗</b>
           </button>
           <button disabled={!films.length} onClick={() => openView("films")}>
-            Films <b>↗</b>
+            <Icon name="film" /> <span>Films<small>{films.length} films</small></span> <b>↗</b>
           </button>
-          <a
-            className="home-download-all"
-            href={downloadUrl("all")}
-            onClick={(event) => adaptDownload(event, "all")}
-          >
-            Download all <b>↓</b>
-          </a>
         </div>
       </section>
+      <button className="home-share" onClick={() => void shareGallery()}><Icon name="share" /> Share</button>
     </main>
   );
 }
@@ -396,10 +502,16 @@ function JustifiedPhotoGrid({
   photos,
   names,
   openPhoto,
+  selectionMode,
+  selectedPhotos,
+  togglePhoto,
 }: {
   photos: Media[];
   names: string;
   openPhoto: (index: number) => void;
+  selectionMode: boolean;
+  selectedPhotos: string[];
+  togglePhoto: (id: string) => void;
 }) {
   const container = useRef<HTMLElement | null>(null);
   const [width, setWidth] = useState(1200);
@@ -444,11 +556,11 @@ function JustifiedPhotoGrid({
         <div className="justified-row" key={rowIndex} style={{ height: row.height }}>
           {row.items.map(({ photo, index, ratio }) => (
             <article
-              className="public-photo-tile"
+              className={`public-photo-tile ${selectedPhotos.includes(photo.id) ? "is-selected" : ""}`}
               key={photo.id}
               style={{ width: row.height * ratio }}
             >
-              <button onClick={() => openPhoto(index)}>
+              <button onClick={() => selectionMode ? togglePhoto(photo.id) : openPhoto(index)}>
                 <img
                   src={photo.url!}
                   alt={photo.alt || `${names} photograph ${index + 1}`}
@@ -463,6 +575,7 @@ function JustifiedPhotoGrid({
                   }}
                 />
               </button>
+              {selectionMode && <b className="selection-check">{selectedPhotos.includes(photo.id) ? "✓" : ""}</b>}
               <span>{String(index + 1).padStart(2, "0")}</span>
               <a
                 className="media-card-download"
@@ -478,6 +591,26 @@ function JustifiedPhotoGrid({
       ))}
     </section>
   );
+}
+function MobileActionBar({ back, share, download }: { back: () => void; share: () => Promise<void>; download: string }) {
+  return (
+    <nav className="mobile-action-bar" aria-label="Gallery actions">
+      <button onClick={back}><Icon name="back" /> Gallery</button>
+      <button onClick={() => void share()}><Icon name="share" /> Share</button>
+      <a href={download}><Icon name="download" /> Download</a>
+    </nav>
+  );
+}
+function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back" | "select" }) {
+  const paths = {
+    photo: <><rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="2"/><path d="m3 17 5-4 3 2 4-4 6 6"/></>,
+    film: <><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M8 5v14M16 5v14M3 10h5M16 10h5M3 15h5M16 15h5"/></>,
+    download: <><path d="M12 3v12m-4-4 4 4 4-4"/><path d="M5 20h14"/></>,
+    share: <><circle cx="18" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="19" r="2"/><path d="m8 11 8-5M8 13l8 5"/></>,
+    back: <path d="m15 18-6-6 6-6"/>,
+    select: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></>,
+  };
+  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 function DynamicHeader({ names, back }: { names: string; back: () => void }) {
   return (
