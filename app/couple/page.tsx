@@ -33,6 +33,8 @@ export default function CoupleGallery() {
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const [activeFilm, setActiveFilm] = useState<number | null>(null);
   const wheelLocked = useRef(false);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("id");
     if (!id) {
@@ -74,7 +76,12 @@ export default function CoupleGallery() {
         );
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [activePhoto, gallery]);
   if (error)
     return (
@@ -105,6 +112,14 @@ export default function CoupleGallery() {
     if (window.location.hash) window.history.back();
     else setView("home");
   };
+  const changePhoto = (direction: -1 | 1) => {
+    setSwipeOffset(0);
+    setActivePhoto((current) =>
+      current === null
+        ? null
+        : (current + direction + photos.length) % photos.length,
+    );
+  };
   if (view === "photos")
     return (
       <main className="dynamic-photos">
@@ -131,6 +146,9 @@ export default function CoupleGallery() {
         {activePhoto !== null && (
           <div
             className="dynamic-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${names} photo viewer`}
             onClick={() => setActivePhoto(null)}
             onWheel={(event) => {
               event.stopPropagation();
@@ -144,25 +162,47 @@ export default function CoupleGallery() {
                 Math.abs(event.deltaX) > Math.abs(event.deltaY)
                   ? event.deltaX
                   : event.deltaY;
-              setActivePhoto(
-                (activePhoto + (delta > 0 ? 1 : -1) + photos.length) %
-                  photos.length,
-              );
+              changePhoto(delta > 0 ? 1 : -1);
               window.setTimeout(() => (wheelLocked.current = false), 420);
+            }}
+            onPointerDown={(event) => {
+              if (event.pointerType === "mouse") return;
+              swipeStart.current = { x: event.clientX, y: event.clientY };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!swipeStart.current || event.pointerType === "mouse") return;
+              const dx = event.clientX - swipeStart.current.x;
+              const dy = event.clientY - swipeStart.current.y;
+              if (Math.abs(dx) > Math.abs(dy)) setSwipeOffset(dx);
+            }}
+            onPointerUp={(event) => {
+              if (!swipeStart.current || event.pointerType === "mouse") return;
+              const dx = event.clientX - swipeStart.current.x;
+              const dy = event.clientY - swipeStart.current.y;
+              swipeStart.current = null;
+              if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy))
+                changePhoto(dx < 0 ? 1 : -1);
+              else setSwipeOffset(0);
+            }}
+            onPointerCancel={() => {
+              swipeStart.current = null;
+              setSwipeOffset(0);
             }}
           >
             <button
               className="dynamic-close"
               onClick={() => setActivePhoto(null)}
+              aria-label="Close photo viewer"
             >
               ×
             </button>
             <button
+              className="lightbox-arrow is-previous"
+              aria-label="Previous photo"
               onClick={(e) => {
                 e.stopPropagation();
-                setActivePhoto(
-                  (activePhoto - 1 + photos.length) % photos.length,
-                );
+                changePhoto(-1);
               }}
             >
               ←
@@ -171,7 +211,25 @@ export default function CoupleGallery() {
               onClick={(e) => e.stopPropagation()}
               src={photos[activePhoto].url!}
               alt={photos[activePhoto].alt}
+              draggable={false}
+              style={{
+                transform: `translateX(${swipeOffset}px) scale(${swipeOffset ? 0.985 : 1})`,
+                opacity: swipeOffset ? Math.max(0.55, 1 - Math.abs(swipeOffset) / 500) : 1,
+                transition: swipeOffset ? "none" : undefined,
+              }}
             />
+            {[1, -1].map((offset) => {
+              const preloadIndex =
+                (activePhoto + offset + photos.length) % photos.length;
+              return (
+                <link
+                  key={offset}
+                  rel="preload"
+                  as="image"
+                  href={photos[preloadIndex].url!}
+                />
+              );
+            })}
             <span className="lightbox-count">
               {String(activePhoto + 1).padStart(2, "0")} /{" "}
               {String(photos.length).padStart(2, "0")}
@@ -183,9 +241,11 @@ export default function CoupleGallery() {
               Download original
             </a>
             <button
+              className="lightbox-arrow is-next"
+              aria-label="Next photo"
               onClick={(e) => {
                 e.stopPropagation();
-                setActivePhoto((activePhoto + 1) % photos.length);
+                changePhoto(1);
               }}
             >
               →

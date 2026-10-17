@@ -951,6 +951,9 @@ body:has(.dynamic-photos) {
   display: grid;
   grid-template-columns: 60px 1fr 60px;
   align-items: center;
+  overscroll-behavior: contain;
+  touch-action: none;
+  user-select: none;
 }
 .dynamic-lightbox img {
   max-width: min(100%, 1500px);
@@ -958,6 +961,8 @@ body:has(.dynamic-photos) {
   margin: auto;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.52);
   animation: lightbox-reveal 240ms ease both;
+  object-fit: contain;
+  will-change: transform, opacity;
 }
 .dynamic-lightbox button {
   background: none;
@@ -976,6 +981,9 @@ body:has(.dynamic-photos) {
   position: absolute;
   right: 1rem;
   top: 1rem;
+  z-index: 2;
+  width: 48px;
+  height: 48px;
 }
 .lightbox-count {
   position: absolute;
@@ -1070,6 +1078,35 @@ body:has(.dynamic-photos) {
   }
   .dynamic-film-copy {
     top: 18%;
+  }
+  .dynamic-lightbox {
+    padding: 4rem 0 5.5rem;
+    grid-template-columns: 1fr;
+  }
+  .dynamic-lightbox img {
+    width: 100%;
+    max-height: calc(100svh - 9.5rem);
+  }
+  .dynamic-lightbox .lightbox-arrow {
+    position: absolute;
+    bottom: 1.2rem;
+    width: 52px;
+    height: 52px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+  }
+  .dynamic-lightbox .lightbox-arrow.is-previous {
+    left: 1rem;
+  }
+  .dynamic-lightbox .lightbox-arrow.is-next {
+    right: 1rem;
+  }
+  .dynamic-lightbox .original-download {
+    bottom: 2.3rem;
+  }
+  .lightbox-count {
+    left: 1rem;
+    top: 1.75rem;
   }
 }
 
