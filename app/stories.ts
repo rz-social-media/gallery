@@ -11,6 +11,11 @@ export type WeddingStory = {
   names: string;
   location: string;
   heroImage: string;
+  photos: Array<{
+    src: string;
+    alt: string;
+    orientation: "landscape" | "portrait";
+  }>;
   videos: WeddingVideo[];
 };
 
@@ -20,6 +25,11 @@ export const stories: WeddingStory[] = [
     names: "Jasmin & Daniel",
     location: "Italy",
     heroImage: "/images/jasmin-daniel-hero.jpg",
+    photos: [
+      { src: "/images/jasmin-daniel-hero.jpg", alt: "Jasmin and Daniel at their Italian wedding", orientation: "landscape" },
+      { src: "/images/jasmin-teaser-cover.jpg", alt: "A quiet moment from Jasmin and Daniel's wedding", orientation: "portrait" },
+      { src: "/images/jasmin-short-film-cover.jpg", alt: "Jasmin and Daniel celebrating together", orientation: "landscape" },
+    ],
     videos: [
       {
         id: "87DnRdS4efJH541k1eIoqx012sy3Lnz900s402UHNaRUew",
@@ -42,6 +52,12 @@ export const stories: WeddingStory[] = [
     names: "Ofir & Michael",
     location: "Château de Prunay",
     heroImage: "/images/ofir-michael-hero.jpg",
+    photos: [
+      { src: "/images/ofir-michael-hero.jpg", alt: "Ofir and Michael at Château de Prunay", orientation: "landscape" },
+      { src: "/images/ofir-michael-photoshoot-cover.jpg", alt: "Ofir and Michael during their wedding portrait session", orientation: "portrait" },
+      { src: "/images/ofir-michael-decor-cover.jpg", alt: "Wedding details at Château de Prunay", orientation: "landscape" },
+      { src: "/images/ofir-michael-teaser-cover.jpg", alt: "Ofir and Michael celebrating their wedding", orientation: "landscape" },
+    ],
     videos: [
       {
         id: "oEZSS00EsoWVjt5xyh9hKNb02qEaOWln2QmDY62YXT02hE",
@@ -71,6 +87,11 @@ export const stories: WeddingStory[] = [
     names: "Priscillia & Cory",
     location: "Wedding Story",
     heroImage: "/images/priscillia-cory-hero.jpg",
+    photos: [
+      { src: "/images/priscillia-cory-hero.jpg", alt: "Priscillia and Cory on their wedding day", orientation: "landscape" },
+      { src: "/images/priscillia-cover-ceremony.jpg", alt: "Priscillia and Cory's wedding ceremony", orientation: "portrait" },
+      { src: "/images/priscillia-cover-dinner.jpg", alt: "Priscillia and Cory's wedding dinner", orientation: "landscape" },
+    ],
     videos: [
       {
         id: "ZGJUTPgXDripAlzu1ItIR02CKwxfex8PUsQBfNlb1Wx8",

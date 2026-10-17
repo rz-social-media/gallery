@@ -2,7 +2,7 @@
 
 A cinematic, single-page wedding film showcase powered by Mux adaptive streaming.
 
-Live site: https://rz-social-media.github.io/wedding-films/
+Live site: https://rz-social-media.github.io/gallery/
 
 ## Development
 

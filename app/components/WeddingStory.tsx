@@ -82,17 +82,17 @@ export default function WeddingStory({ story }: { story: WeddingStoryData }) {
       <div className="cinematic-shade" aria-hidden="true" />
 
       <header className="topbar">
-        <a className="brand" href={`${publicBasePath}/`} aria-label="Back to RZ Weddings portfolio">
+        <a className="brand" href={`${publicBasePath}/`} aria-label="Back to RZ Weddings Gallery">
           <span className="brand-seal">RZ</span>
           <span className="brand-copy">
             <strong>RZ Weddings</strong>
-            <small>Selected motion</small>
+            <small>Gallery</small>
           </span>
         </a>
 
         <div className="top-actions">
-          <a className="top-action back-action" href={`${publicBasePath}/`}>
-            <span aria-hidden="true">←</span> Portfolio
+          <a className="top-action back-action" href={`${publicBasePath}/films/`}>
+            <span aria-hidden="true">←</span> Films
           </a>
           <span className="quality-chip">4K</span>
           <button className="top-action" onClick={sharePage} type="button">

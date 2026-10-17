@@ -23,18 +23,32 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the one-screen wedding portfolio", async () => {
+test("server-renders the gallery gateway", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>RZ Weddings \| Selected Wedding Stories<\/title>/i);
-  assert.match(html, /Jasmin &amp; Daniel/);
-  assert.match(html, /Ofir &amp; Michael/);
-  assert.match(html, /Priscillia &amp; Cory/);
-  assert.match(html, /Wedding Stories/);
+  assert.match(html, /<title>RZ Weddings \| Gallery<\/title>/i);
+  assert.match(html, /Photography/);
+  assert.match(html, /Films/);
+  assert.match(html, /The <[^>]+>Gallery/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
+});
+
+test("server-renders the photography index and gallery", async () => {
+  const indexResponse = await render("/photography");
+  assert.equal(indexResponse.status, 200);
+  const indexHtml = await indexResponse.text();
+  assert.match(indexHtml, /Wedding Photography/);
+  assert.match(indexHtml, /Jasmin &amp; Daniel/);
+  assert.match(indexHtml, /Ofir &amp; Michael/);
+
+  const galleryResponse = await render("/weddings/ofir-michael/photography");
+  assert.equal(galleryResponse.status, 200);
+  const galleryHtml = await galleryResponse.text();
+  assert.match(galleryHtml, /A wedding in photographs/i);
+  assert.match(galleryHtml, /ofir-michael-photoshoot-cover\.jpg/);
 });
 
 test("server-renders a couple story with its Mux videos", async () => {
@@ -68,8 +82,8 @@ test("ships the custom fonts and removes starter dependencies", async () => {
   assert.match(stories, /ZGJUTPgXDripAlzu1ItIR02CKwxfex8PUsQBfNlb1Wx8/);
   assert.match(storyComponent, /minResolution="2160p"/);
   assert.match(storyComponent, /maxResolution="2160p"/);
-  assert.match(layout, /RZ Weddings \| Selected Wedding Stories/);
-  assert.match(layout, /wedding-films/);
+  assert.match(layout, /RZ Weddings \| Gallery/);
+  assert.match(layout, /github\.io\/gallery/);
   assert.match(layout, /jasmin-daniel-hero\.jpg/);
 
   await Promise.all([

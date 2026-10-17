@@ -24,6 +24,176 @@ body {
   font-family: "Vogue Avant Garde", Arial, sans-serif;
 }
 
+html:has(.photo-story),
+body:has(.photo-story) {
+  overflow: auto;
+  background: #f1ece4;
+}
+
+.gallery-gateway {
+  min-height: 100svh;
+  overflow: hidden;
+  position: relative;
+  background: #0e0b08;
+}
+
+.gateway-header {
+  padding: 1.35rem clamp(1.25rem, 3vw, 3.2rem);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  z-index: 4;
+}
+
+.gateway-label {
+  padding-top: 0.3rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gateway-intro {
+  width: min(560px, calc(100% - 2.5rem));
+  position: absolute;
+  top: 21%;
+  left: clamp(1.25rem, 3vw, 3.2rem);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.gateway-intro h1 {
+  margin: 0;
+  font-family: "Meno Display", Georgia, serif;
+  font-size: clamp(4.2rem, 8vw, 8.6rem);
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 0.82;
+}
+
+.gateway-intro h1 em {
+  display: block;
+  color: var(--champagne);
+  font-style: italic;
+  font-weight: 300;
+}
+
+.gateway-intro > p:last-child {
+  width: min(410px, 92%);
+  margin: 1.35rem 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  line-height: 1.8;
+}
+
+.gateway-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  position: absolute;
+  inset: 0;
+}
+
+.gateway-choice {
+  overflow: hidden;
+  position: relative;
+  color: white;
+  text-decoration: none;
+}
+
+.gateway-choice:first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.gateway-choice img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  filter: saturate(0.76) brightness(0.72);
+  transition: filter 600ms ease, transform 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gateway-choice:first-child img {
+  object-position: 64% center;
+}
+
+.gateway-choice:nth-child(2) img {
+  object-position: center;
+}
+
+.gateway-choice-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, rgba(9, 6, 4, 0.94), transparent 58%),
+    linear-gradient(90deg, rgba(9, 6, 4, 0.66), transparent 52%);
+}
+
+.gateway-choice-number {
+  position: absolute;
+  right: 2rem;
+  bottom: 2rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+}
+
+.gateway-choice-copy {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  right: clamp(1.25rem, 3vw, 3.2rem);
+  bottom: clamp(3.2rem, 8vw, 7.5rem);
+  left: clamp(1.25rem, 3vw, 3.2rem);
+}
+
+.gateway-choice-copy small {
+  margin-bottom: 0.7rem;
+  color: var(--champagne);
+  font-size: 0.57rem;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+}
+
+.gateway-choice-copy strong {
+  font-family: "Meno Display", Georgia, serif;
+  font-size: clamp(2.8rem, 5vw, 6rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: -0.05em;
+}
+
+.gateway-choice-copy > span {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.57rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.gateway-choice-copy i {
+  color: var(--champagne);
+  font-family: Arial, sans-serif;
+  font-size: 0.95rem;
+  font-style: normal;
+  transition: transform 180ms ease;
+}
+
+.gateway-choice:hover img,
+.gateway-choice:focus-visible img {
+  filter: saturate(1) brightness(0.85);
+  transform: scale(1.025);
+}
+
+.gateway-choice:hover i,
+.gateway-choice:focus-visible i {
+  transform: translate(3px, -3px);
+}
+
 button,
 a {
   color: inherit;
@@ -644,6 +814,151 @@ a:focus-visible {
   color: #1d120c;
 }
 
+.photo-story {
+  min-height: 100svh;
+  overflow-x: hidden;
+  background: #f1ece4;
+  color: #211812;
+}
+
+.photo-topbar {
+  padding: 1.35rem clamp(1.25rem, 3vw, 3.2rem);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.photo-story .brand-copy small,
+.photo-story .eyebrow {
+  color: #9b7045;
+}
+
+.photo-story .brand-seal {
+  border-color: rgba(68, 41, 24, 0.22);
+}
+
+.photo-story .top-action {
+  border-color: rgba(68, 41, 24, 0.16);
+  background: rgba(255, 255, 255, 0.48);
+  color: #39291f;
+}
+
+.photo-heading {
+  padding: clamp(4rem, 8vw, 8rem) clamp(1.25rem, 8vw, 9rem) clamp(3rem, 6vw, 6rem);
+}
+
+.photo-heading h1 {
+  margin: 0;
+  font-family: "Meno Display", Georgia, serif;
+  font-size: clamp(4rem, 9vw, 10rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: -0.06em;
+  line-height: 0.82;
+}
+
+.photo-heading > p:last-child {
+  margin: 1.4rem 0 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.photo-grid {
+  padding: 0 clamp(1rem, 3vw, 3.2rem) clamp(4rem, 7vw, 8rem);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: clamp(0.6rem, 1.2vw, 1.25rem);
+}
+
+.photo-tile {
+  grid-column: span 6;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  background: #d8cec2;
+  cursor: zoom-in;
+}
+
+.photo-tile.is-portrait {
+  grid-column: span 4;
+  grid-row: span 2;
+  aspect-ratio: 3 / 4;
+}
+
+.photo-tile:nth-child(3n) {
+  grid-column: span 8;
+}
+
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.photo-tile > span {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.8rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.photo-tile:hover img,
+.photo-tile:focus-visible img {
+  transform: scale(1.025);
+}
+
+.lightbox {
+  display: grid;
+  place-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 6, 5, 0.97);
+  color: white;
+  cursor: zoom-out;
+}
+
+.lightbox > img {
+  width: auto;
+  max-width: min(88vw, 1600px);
+  height: auto;
+  max-height: 86svh;
+  object-fit: contain;
+  cursor: default;
+}
+
+.lightbox > p {
+  margin: 0;
+  position: absolute;
+  bottom: 1.25rem;
+  font-size: 0.57rem;
+  letter-spacing: 0.16em;
+}
+
+.lightbox-arrow {
+  width: 48px;
+  height: 48px;
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.32);
+  color: white;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.lightbox-arrow.is-previous { left: 1.25rem; }
+.lightbox-arrow.is-next { right: 1.25rem; }
+
 @keyframes modal-in {
   from {
     opacity: 0;
@@ -677,6 +992,90 @@ a:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .gallery-gateway {
+    overflow-y: auto;
+  }
+
+  .gateway-header {
+    padding: 1rem;
+  }
+
+  .gateway-label {
+    display: none;
+  }
+
+  .gateway-intro {
+    top: 17%;
+    left: 1rem;
+  }
+
+  .gateway-intro h1 {
+    font-size: clamp(3.5rem, 17vw, 5.4rem);
+  }
+
+  .gateway-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .gateway-choice:first-child {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .gateway-choice-copy {
+    bottom: 1.6rem;
+  }
+
+  .gateway-choice-copy strong {
+    font-size: 2.4rem;
+  }
+
+  .gateway-choice-copy > span,
+  .gateway-choice-number {
+    display: none;
+  }
+
+  .photo-topbar {
+    padding: 1rem;
+  }
+
+  .photo-heading {
+    padding: 4rem 1rem 2.5rem;
+  }
+
+  .photo-heading h1 {
+    font-size: clamp(3.4rem, 16vw, 5rem);
+  }
+
+  .photo-grid {
+    padding: 0 0.65rem 3rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .photo-tile,
+  .photo-tile.is-portrait,
+  .photo-tile:nth-child(3n) {
+    grid-column: span 1;
+    grid-row: auto;
+    aspect-ratio: 3 / 4;
+  }
+
+  .photo-tile:nth-child(3n + 1) {
+    grid-column: span 2;
+    aspect-ratio: 4 / 3;
+  }
+
+  .lightbox > img {
+    max-width: 100vw;
+    max-height: 82svh;
+  }
+
+  .lightbox-arrow {
+    top: auto;
+    bottom: 1rem;
+    transform: none;
+  }
   .portfolio-header {
     padding: 1rem;
   }
@@ -854,6 +1253,12 @@ a:focus-visible {
   .card-preview-play,
   .play-all,
   .top-action {
+    transition: none;
+  }
+
+  .gateway-choice img,
+  .gateway-choice-copy i,
+  .photo-tile img {
     transition: none;
   }
 

@@ -30,18 +30,18 @@ const fontFaceStyles = `
 `;
 
 const previewImage =
-  "https://rz-social-media.github.io/wedding-films/images/jasmin-daniel-hero.jpg";
+  "https://rz-social-media.github.io/gallery/images/jasmin-daniel-hero.jpg";
 
-const siteUrl = "https://rz-social-media.github.io/wedding-films/";
+const siteUrl = "https://rz-social-media.github.io/gallery/";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "RZ Weddings | Selected Wedding Stories",
+  title: "RZ Weddings | Gallery",
   description:
-    "Selected wedding stories captured in cinematic motion by RZ Weddings.",
+    "Selected wedding photography and films by RZ Weddings.",
   openGraph: {
-    title: "RZ Weddings | Selected Wedding Stories",
-    description: "A collection of wedding stories in cinematic motion.",
+    title: "RZ Weddings | Gallery",
+    description: "A collection of wedding stories in photographs and cinematic motion.",
     url: siteUrl,
     siteName: "RZ Weddings",
     images: [
@@ -56,8 +56,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "RZ Weddings | Selected Wedding Stories",
-    description: "A collection of wedding stories in cinematic motion.",
+    title: "RZ Weddings | Gallery",
+    description: "A collection of wedding stories in photographs and cinematic motion.",
     images: [previewImage],
   },
   icons: {
