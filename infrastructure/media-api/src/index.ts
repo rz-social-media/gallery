@@ -51,6 +51,27 @@ export default {
         if (!authorized(request, env)) return json({ error: "Unauthorized" }, 401, origin); const id = url.pathname.split("/").pop(); const result = await mux(env, `/assets/${id}`); const asset = result.data;
         return json({ assetId: asset.id, status: asset.status, playbackId: asset.playback_ids?.[0]?.id || null, downloadReady: asset.static_renditions?.files?.some((x: any) => x.resolution === "highest" && x.status === "ready") || false }, 200, origin);
       }
+      if (url.pathname === "/api/galleries" && request.method === "GET") {
+        if (!authorized(request, env)) return json({ error: "Unauthorized" }, 401, origin);
+        const listed = await env.MEDIA.list({ prefix: "galleries/" });
+        const galleries = await Promise.all(listed.objects.map(async ({ key }) => {
+          const object = await env.MEDIA.get(key); return object ? object.json() : null;
+        }));
+        return json(galleries.filter(Boolean), 200, origin);
+      }
+      if (url.pathname.startsWith("/api/galleries/") && request.method === "GET") {
+        const slug = safeSlug(url.pathname.split("/").pop() || ""); const object = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!object) return json({ error: "Gallery not found" }, 404, origin); const gallery = await object.json<Record<string, any>>();
+        if (!gallery.published && !authorized(request, env)) return json({ error: "Gallery not found" }, 404, origin);
+        return json(gallery, 200, origin);
+      }
+      if (url.pathname.startsWith("/api/galleries/") && request.method === "POST") {
+        if (!authorized(request, env)) return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(url.pathname.split("/").pop() || ""); if (!slug) return json({ error: "Invalid slug" }, 400, origin);
+        const gallery = await request.json<Record<string, any>>(); gallery.slug = slug; gallery.updatedAt = new Date().toISOString();
+        await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), { httpMetadata: { contentType: "application/json" } });
+        return json(gallery, 200, origin);
+      }
       if (url.pathname === "/api/download" && request.method === "GET") {
         const key = url.searchParams.get("key") || ""; if (!key.startsWith("couples/")) return json({ error: "Invalid file" }, 400, origin); return Response.redirect(await signedR2(env, key, "GET", 900), 302);
       }
