@@ -2,6 +2,9 @@ name = "rz-gallery-media-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-17"
 
+[triggers]
+crons = ["17 3 * * *"]
+
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "rz-gallery-media"

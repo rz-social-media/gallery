@@ -32,6 +32,7 @@ const safeName = (value: string) =>
   value.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-140);
 const basic = (id: string, secret: string) =>
   `Basic ${btoa(`${id}:${secret}`)}`;
+const ORPHAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function authorized(request: Request, env: Env) {
   return (
@@ -70,7 +71,7 @@ async function mux(env: Env, path: string, init?: RequestInit) {
   });
   if (!response.ok)
     throw new Error(`Mux ${response.status}: ${await response.text()}`);
-  return response.json() as Promise<{ data: Record<string, any> }>;
+  return response.json() as Promise<any>;
 }
 async function deleteMuxAsset(env: Env, assetId: string) {
   const response = await fetch(
@@ -91,6 +92,178 @@ async function deleteR2Prefix(bucket: R2Bucket, prefix: string) {
       await bucket.delete(listed.objects.map(({ key }) => key));
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
+}
+async function loadAllGalleries(env: Env) {
+  const galleries: Array<{ key: string; value: Record<string, any> }> = [];
+  let cursor: string | undefined;
+  do {
+    const listed = await env.MEDIA.list({ prefix: "galleries/", cursor });
+    for (const { key } of listed.objects) {
+      const object = await env.MEDIA.get(key);
+      if (!object) throw new Error(`Gallery record disappeared: ${key}`);
+      galleries.push({ key, value: await object.json<Record<string, any>>() });
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return galleries;
+}
+function galleryReferences(
+  galleries: Array<{ key: string; value: Record<string, any> }>,
+) {
+  const r2 = new Set<string>();
+  const muxAssets = new Set<string>();
+  const videoSources = new Set<string>();
+  const sourceWithReferencedAsset = new Set<string>();
+  for (const { value: gallery } of galleries) {
+    const slug = safeSlug(String(gallery.slug || ""));
+    for (const item of Array.isArray(gallery.media) ? gallery.media : []) {
+      for (const field of ["originalKey", "webKey", "posterKey"]) {
+        const key = item[field];
+        if (typeof key === "string" && key.startsWith("couples/")) r2.add(key);
+      }
+      for (const field of ["url", "posterUrl"]) {
+        const value = item[field];
+        if (typeof value !== "string") continue;
+        try {
+          const marker = "/media/";
+          const pathname = new URL(value).pathname;
+          const index = pathname.indexOf(marker);
+          if (index >= 0) r2.add(decodeURIComponent(pathname.slice(index + marker.length)));
+        } catch {
+          // An invalid display URL is not enough evidence to delete anything.
+        }
+      }
+      if (typeof item.assetId === "string") muxAssets.add(item.assetId);
+      if (
+        item.type === "video" &&
+        slug &&
+        typeof item.originalKey === "string"
+      ) {
+        const source = `${slug}\n${item.originalKey}`;
+        videoSources.add(source);
+        if (typeof item.assetId === "string")
+          sourceWithReferencedAsset.add(source);
+      }
+    }
+  }
+  return { r2, muxAssets, videoSources, sourceWithReferencedAsset };
+}
+async function listMuxAssets(env: Env) {
+  const assets: Record<string, any>[] = [];
+  let cursor = "";
+  do {
+    const query = new URLSearchParams({ limit: "100" });
+    if (cursor) query.set("cursor", cursor);
+    const page = await mux(env, `/assets?${query}`);
+    if (!Array.isArray(page.data)) throw new Error("Invalid Mux asset list");
+    assets.push(...page.data);
+    cursor = typeof page.next_cursor === "string" ? page.next_cursor : "";
+  } while (cursor);
+  return assets;
+}
+function managedMuxSource(asset: Record<string, any>) {
+  if (typeof asset.passthrough !== "string") return null;
+  try {
+    const value = JSON.parse(asset.passthrough);
+    const slug = safeSlug(String(value.coupleSlug || ""));
+    const originalKey = String(value.originalKey || "");
+    if (!slug || !originalKey.startsWith(`couples/${slug}/video/`)) return null;
+    return { slug, originalKey, key: `${slug}\n${originalKey}` };
+  } catch {
+    return null;
+  }
+}
+async function findExistingMuxAsset(
+  env: Env,
+  slug: string,
+  originalKey: string,
+) {
+  const galleryObject = await env.MEDIA.get(`galleries/${slug}.json`);
+  if (galleryObject) {
+    const gallery = await galleryObject.json<Record<string, any>>();
+    const existing = (gallery.media || []).find(
+      (item: Record<string, any>) =>
+        item.type === "video" &&
+        item.originalKey === originalKey &&
+        typeof item.assetId === "string",
+    );
+    if (existing) return { id: existing.assetId, status: "existing" };
+  }
+  const assets = await listMuxAssets(env);
+  const existing = assets.find((asset) => {
+    const source = managedMuxSource(asset);
+    return (
+      source?.slug === slug &&
+      source.originalKey === originalKey &&
+      (asset.status === "preparing" || asset.status === "ready")
+    );
+  });
+  return existing ? { id: existing.id, status: existing.status } : null;
+}
+async function auditStorage(env: Env, execute: boolean) {
+  const cutoff = Date.now() - ORPHAN_GRACE_MS;
+  const galleries = await loadAllGalleries(env);
+  const refs = galleryReferences(galleries);
+  const r2Candidates: string[] = [];
+  let cursor: string | undefined;
+  let scannedR2 = 0;
+  do {
+    const listed = await env.MEDIA.list({ prefix: "couples/", cursor });
+    scannedR2 += listed.objects.length;
+    for (const object of listed.objects) {
+      if (!refs.r2.has(object.key) && object.uploaded.getTime() < cutoff)
+        r2Candidates.push(object.key);
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  const muxAssets = await listMuxAssets(env);
+  const muxCandidates = muxAssets.filter((asset) => {
+    const source = managedMuxSource(asset);
+    if (!source || refs.muxAssets.has(asset.id)) return false;
+    if (Number(asset.created_at || 0) * 1000 >= cutoff) return false;
+    if (asset.status === "errored") return true;
+    // If a gallery references the source but has no saved asset yet, this may
+    // be a recoverable interrupted publish, so it must remain untouched.
+    return (
+      !refs.videoSources.has(source.key) ||
+      refs.sourceWithReferencedAsset.has(source.key)
+    );
+  });
+
+  const deletedR2: string[] = [];
+  const deletedMux: string[] = [];
+  if (execute && (r2Candidates.length || muxCandidates.length)) {
+    // Re-read every gallery immediately before deletion. Any parse/read error
+    // aborts the whole cleanup, and newly referenced media is protected.
+    const latestRefs = galleryReferences(await loadAllGalleries(env));
+    const safeR2 = r2Candidates.filter((key) => !latestRefs.r2.has(key));
+    for (let index = 0; index < safeR2.length; index += 1000) {
+      const batch = safeR2.slice(index, index + 1000);
+      await env.MEDIA.delete(batch);
+      deletedR2.push(...batch);
+    }
+    for (const asset of muxCandidates) {
+      const source = managedMuxSource(asset);
+      if (!source || latestRefs.muxAssets.has(asset.id)) continue;
+      if (
+        asset.status !== "errored" &&
+        latestRefs.videoSources.has(source.key) &&
+        !latestRefs.sourceWithReferencedAsset.has(source.key)
+      )
+        continue;
+      await deleteMuxAsset(env, asset.id);
+      deletedMux.push(asset.id);
+    }
+  }
+  return {
+    mode: execute ? "execute" : "dry-run",
+    graceDays: ORPHAN_GRACE_MS / 86400000,
+    galleries: galleries.length,
+    scanned: { r2: scannedR2, mux: muxAssets.length },
+    candidates: { r2: r2Candidates.length, mux: muxCandidates.length },
+    deleted: { r2: deletedR2.length, mux: deletedMux.length },
+  };
 }
 async function galleryArchive(
   env: Env,
@@ -155,16 +328,22 @@ export default {
           filename: string;
           contentType: string;
           kind: "photo" | "photo-web" | "video" | "video-poster";
+          sha256: string;
         }>();
         const slug = safeSlug(body.coupleSlug),
-          filename = safeName(body.filename);
-        if (!slug || !filename)
+          filename = safeName(body.filename),
+          sha256 = String(body.sha256 || "").toLowerCase();
+        if (!slug || !filename || !/^[a-f0-9]{64}$/.test(sha256))
           return json({ error: "Invalid upload" }, 400, origin);
-        const key = `couples/${slug}/${body.kind}/${crypto.randomUUID()}-${filename}`;
+        const key = `couples/${slug}/${body.kind}/${sha256}`;
+        const existing = await env.MEDIA.head(key);
         return json(
           {
             key,
-            uploadUrl: await signedR2(env, key, "PUT", 3600),
+            exists: Boolean(existing),
+            uploadUrl: existing
+              ? null
+              : await signedR2(env, key, "PUT", 3600),
             contentType: body.contentType,
           },
           200,
@@ -185,6 +364,18 @@ export default {
           )
         )
           return json({ error: "Invalid source" }, 400, origin);
+        const slug = safeSlug(body.coupleSlug);
+        const existing = await findExistingMuxAsset(
+          env,
+          slug,
+          body.originalKey,
+        );
+        if (existing)
+          return json(
+            { assetId: existing.id, status: existing.status, reused: true },
+            200,
+            origin,
+          );
         const inputUrl = await signedR2(env, body.originalKey, "GET", 86400);
         const result = await mux(env, "/assets", {
           method: "POST",
@@ -195,7 +386,8 @@ export default {
             max_resolution_tier: "2160p",
             static_renditions: [{ resolution: "highest" }],
             passthrough: JSON.stringify({
-              coupleSlug: body.coupleSlug,
+              managedBy: "rz-gallery-v1",
+              coupleSlug: slug,
               originalKey: body.originalKey,
               title: body.title,
             }),
@@ -204,6 +396,18 @@ export default {
         return json(
           { assetId: result.data.id, status: result.data.status },
           201,
+          origin,
+        );
+      }
+      if (
+        url.pathname === "/api/maintenance/audit" &&
+        request.method === "POST"
+      ) {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        return json(
+          await auditStorage(env, url.searchParams.get("execute") === "true"),
+          200,
           origin,
         );
       }
@@ -346,5 +550,8 @@ export default {
         origin,
       );
     }
+  },
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(auditStorage(env, true));
   },
 } satisfies ExportedHandler<Env>;

@@ -13,3 +13,13 @@ Cloudflare Worker for original-quality delivery and Mux ingestion.
 Never place these values in GitHub Pages or commit them to Git.
 
 The browser uploads exact originals to signed R2 URLs. Mux ingests the R2 video copy for adaptive streaming and creates a highest-quality downloadable MP4. Original downloads continue to come from R2.
+
+## Duplicate and orphan protection
+
+- Uploads are addressed by a SHA-256 fingerprint within each gallery and media kind. Retrying the same file reuses the existing R2 object instead of storing a second copy.
+- Mux creation checks both the gallery record and managed Mux asset metadata before creating an asset, so interrupted publish retries reuse the original asset.
+- A daily maintenance audit removes only managed, unreferenced objects/assets older than seven days. It reads the complete gallery index twice before deletion and aborts on any gallery read/parse failure.
+- A video asset for an interrupted publish is preserved when its R2 source is still present in a gallery but no Mux asset ID has been saved yet.
+- Referenced media is never automatically deleted, even when two referenced entries appear to be duplicates.
+
+An authenticated `POST /api/maintenance/audit` is dry-run by default. Add `?execute=true` to run the same conservative cleanup used by the scheduled job.
