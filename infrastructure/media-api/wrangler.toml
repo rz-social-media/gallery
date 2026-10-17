@@ -1,0 +1,11 @@
+name = "rz-gallery-media-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-17"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "rz-gallery-media"
+
+[vars]
+ALLOWED_ORIGIN = "https://rz-social-media.github.io"
+R2_BUCKET_NAME = "rz-gallery-media"
