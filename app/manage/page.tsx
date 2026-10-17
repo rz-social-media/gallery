@@ -25,6 +25,7 @@ type Gallery = {
   weddingDate: string;
   note: string;
   published: boolean;
+  updatedAt?: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
   media: Media[];
@@ -152,7 +153,10 @@ export default function Manager() {
   }
   async function copyGalleryUrl(gallery: Gallery) {
     if (!gallery.published) return;
-    const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}`;
+    const version = gallery.updatedAt
+      ? `?v=${encodeURIComponent(gallery.updatedAt)}`
+      : "";
+    const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${version}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setNotice("Gallery URL copied");
