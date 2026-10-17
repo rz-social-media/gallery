@@ -3,13 +3,13 @@
 import MuxPlayer from "@mux/mux-player-react";
 import { useEffect, useState } from "react";
 
-const API = "https://rz-gallery-manager.appsflyer.chatgpt.site";
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 type Media = { id: string; type: "photo" | "video"; url: string | null; playbackId: string | null; title: string; alt: string };
 type Gallery = { partnerOne: string; partnerTwo: string; location: string; weddingDate: string; note: string; media: Media[] };
 
 export default function CoupleGallery() {
   const [gallery, setGallery] = useState<Gallery | null>(null); const [error, setError] = useState(""); const [view, setView] = useState<"home" | "photos" | "films">("home"); const [activePhoto, setActivePhoto] = useState<number | null>(null); const [activeFilm, setActiveFilm] = useState<number | null>(null);
-  useEffect(() => { const id = new URLSearchParams(window.location.search).get("id"); if (!id) { setError("Gallery link is incomplete."); return; } fetch(`${API}/api/public/couples/${encodeURIComponent(id)}`).then(async (r) => { if (!r.ok) throw new Error("This gallery is not available yet."); return r.json(); }).then(setGallery).catch((e) => setError(e.message)); }, []);
+  useEffect(() => { const id = new URLSearchParams(window.location.search).get("id"); if (!id) { setError("Gallery link is incomplete."); return; } fetch(`${BASE}/data/${encodeURIComponent(id)}.json`, { cache: "no-store" }).then(async (r) => { if (!r.ok) throw new Error("This gallery is not available yet."); return r.json(); }).then((data) => { if (!data.published) throw new Error("This gallery is not available yet."); setGallery(data); }).catch((e) => setError(e.message)); }, []);
   if (error) return <main className="dynamic-message"><span className="brand-seal">RZ</span><h1>Gallery unavailable</h1><p>{error}</p></main>;
   if (!gallery) return <main className="dynamic-message"><span className="brand-seal">RZ</span><p>Preparing your gallery…</p></main>;
   const photos = gallery.media.filter((m) => m.type === "photo" && m.url); const films = gallery.media.filter((m) => m.type === "video" && m.playbackId); const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`; const cover = photos[0]?.url;
