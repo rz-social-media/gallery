@@ -72,6 +72,11 @@ export default {
         await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), { httpMetadata: { contentType: "application/json" } });
         return json(gallery, 200, origin);
       }
+      if (url.pathname.startsWith("/api/galleries/") && request.method === "DELETE") {
+        if (!authorized(request, env)) return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(url.pathname.split("/").pop() || ""); await env.MEDIA.delete(`galleries/${slug}.json`);
+        return json({ ok: true }, 200, origin);
+      }
       if (url.pathname === "/api/download" && request.method === "GET") {
         const key = url.searchParams.get("key") || ""; if (!key.startsWith("couples/")) return json({ error: "Invalid file" }, 400, origin); return Response.redirect(await signedR2(env, key, "GET", 900), 302);
       }
