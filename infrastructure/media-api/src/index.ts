@@ -115,7 +115,7 @@ export default {
           coupleSlug: string;
           filename: string;
           contentType: string;
-          kind: "photo" | "photo-web" | "video";
+          kind: "photo" | "photo-web" | "video" | "video-poster";
         }>();
         const slug = safeSlug(body.coupleSlug),
           filename = safeName(body.filename);
@@ -266,7 +266,7 @@ export default {
       }
       if (url.pathname.startsWith("/media/") && request.method === "GET") {
         const key = decodeURIComponent(url.pathname.slice(7));
-        if (!key.includes("/photo-web/"))
+        if (!key.includes("/photo-web/") && !key.includes("/video-poster/"))
           return new Response("Not found", { status: 404 });
         const object = await env.MEDIA.get(key);
         if (!object) return new Response("Not found", { status: 404 });

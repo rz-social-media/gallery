@@ -1,7 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev";
@@ -31,6 +31,7 @@ export default function CoupleGallery() {
   const [view, setView] = useState<"home" | "photos" | "films">("home");
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const [activeFilm, setActiveFilm] = useState<number | null>(null);
+  const wheelLocked = useRef(false);
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("id");
     if (!id) {
@@ -47,6 +48,25 @@ export default function CoupleGallery() {
       .then(setGallery)
       .catch((e) => setError(e.message));
   }, []);
+  useEffect(() => {
+    if (activePhoto === null || !gallery) return;
+    const photoCount = gallery.media.filter(
+      (item) => item.type === "photo" && item.url,
+    ).length;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActivePhoto(null);
+      if (event.key === "ArrowRight" || event.key === "ArrowDown")
+        setActivePhoto((current) =>
+          current === null ? null : (current + 1) % photoCount,
+        );
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp")
+        setActivePhoto((current) =>
+          current === null ? null : (current - 1 + photoCount) % photoCount,
+        );
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activePhoto, gallery]);
   if (error)
     return (
       <main className="dynamic-message">
@@ -90,6 +110,24 @@ export default function CoupleGallery() {
           <div
             className="dynamic-lightbox"
             onClick={() => setActivePhoto(null)}
+            onWheel={(event) => {
+              event.stopPropagation();
+              if (
+                wheelLocked.current ||
+                Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) < 18
+              )
+                return;
+              wheelLocked.current = true;
+              const delta =
+                Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                  ? event.deltaX
+                  : event.deltaY;
+              setActivePhoto(
+                (activePhoto + (delta > 0 ? 1 : -1) + photos.length) %
+                  photos.length,
+              );
+              window.setTimeout(() => (wheelLocked.current = false), 420);
+            }}
           >
             <button
               className="dynamic-close"
@@ -112,6 +150,10 @@ export default function CoupleGallery() {
               src={photos[activePhoto].url!}
               alt={photos[activePhoto].alt}
             />
+            <span className="lightbox-count">
+              {String(activePhoto + 1).padStart(2, "0")} /{" "}
+              {String(photos.length).padStart(2, "0")}
+            </span>
             <a
               className="original-download"
               href={`${API}/api/download?key=${encodeURIComponent(photos[activePhoto].originalKey)}`}
@@ -154,7 +196,7 @@ export default function CoupleGallery() {
               <img
                 src={
                   film.posterUrl ||
-                  `https://image.mux.com/${film.playbackId}/thumbnail.webp?width=900&fit_mode=smartcrop`
+                  `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
                 }
                 alt=""
               />

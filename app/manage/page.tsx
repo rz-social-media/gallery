@@ -91,10 +91,35 @@ export default function Manager() {
     setBusy(true);
     setNotice("");
     try {
+      let nextGallery = { ...g, slug, published };
+      if (published) {
+        const media = [...nextGallery.media];
+        for (let index = 0; index < media.length; index++) {
+          const item = media[index];
+          if (item.type !== "video" || item.assetId) continue;
+          const created = await call("/api/videos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              originalKey: item.originalKey,
+              title: item.title || "Wedding film",
+              coupleSlug: slug,
+            }),
+          });
+          media[index] = { ...item, assetId: created.assetId };
+          nextGallery = { ...nextGallery, media: [...media] };
+          await call(`/api/galleries/${slug}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...nextGallery, published: g.published }),
+          });
+        }
+        nextGallery = { ...nextGallery, media };
+      }
       const saved = await call(`/api/galleries/${slug}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...g, slug, published }),
+        body: JSON.stringify(nextGallery),
       });
       setActive(saved);
       setNotice(published ? "Published successfully" : "Draft saved");
@@ -102,6 +127,23 @@ export default function Manager() {
       setNotice((e as Error).message);
     }
     setBusy(false);
+  }
+  async function deleteFromDashboard(gallery: Gallery) {
+    const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
+    if (
+      !window.confirm(
+        `Delete ${names}'s entire gallery? This cannot be undone.`,
+      )
+    )
+      return;
+    try {
+      await call(`/api/galleries/${gallery.slug}`, { method: "DELETE" });
+      setRows((current) =>
+        current.filter((item) => item.slug !== gallery.slug),
+      );
+    } catch (error) {
+      alert((error as Error).message);
+    }
   }
   if (!ready)
     return (
@@ -177,20 +219,29 @@ export default function Manager() {
           {rows.map((g) => {
             const cover = g.media.find((x) => x.type === "photo");
             return (
-              <button
-                className="gm-card"
-                key={g.slug}
-                onClick={() => setActive(g)}
-              >
-                <div>
-                  {cover?.url && <img src={cover.url} alt="" />}
-                  <span>{g.published ? "Live" : "Draft"}</span>
-                </div>
-                <h2>
-                  {g.partnerOne} <i>&</i> {g.partnerTwo}
-                </h2>
-                <p>{g.location || "Location not added"}</p>
-              </button>
+              <article className="gm-card" key={g.slug}>
+                <button
+                  className="gm-card-open"
+                  onClick={() => setActive(g)}
+                >
+                  <div>
+                    {cover?.url && <img src={cover.url} alt="" />}
+                    <span>{g.published ? "Live" : "Draft"}</span>
+                  </div>
+                  <h2>
+                    {g.partnerOne} <i>&</i> {g.partnerTwo}
+                  </h2>
+                  <p>{g.location || "Location not added"}</p>
+                </button>
+                <button
+                  className="gm-card-delete"
+                  onClick={() => deleteFromDashboard(g)}
+                  aria-label={`Delete ${g.partnerOne} and ${g.partnerTwo}'s gallery`}
+                  title="Delete gallery"
+                >
+                  Delete
+                </button>
+              </article>
             );
           })}
         </div>
@@ -225,10 +276,6 @@ function Editor({
       null,
     ),
     [elapsedSeconds, setElapsedSeconds] = useState(0),
-    [muxProgress, setMuxProgress] = useState<{
-      state: string | null;
-      percentage: number | null;
-    }>({ state: null, percentage: null }),
     [videoStates, setVideoStates] = useState<Record<string, string>>({}),
     [dropActive, setDropActive] = useState(false),
     [draggedMediaId, setDraggedMediaId] = useState<string | null>(null),
@@ -434,7 +481,6 @@ function Editor({
       setProgress(0);
       setUploadStage("uploading");
       setProcessingStartedAt(null);
-      setMuxProgress({ state: null, percentage: null });
       try {
         if (file.type.startsWith("image/")) {
           const originalKey = await signed(file, file.name, "photo", slug),
@@ -465,21 +511,13 @@ function Editor({
           const originalKey = await signed(file, file.name, "video", slug);
           setUploadStage("processing");
           setProcessingStartedAt(Date.now());
-          const createdResponse = await fetch(`${API}/api/videos`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${code}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              originalKey,
-              title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
-              coupleSlug: slug,
-            }),
-          });
-          const created = await createdResponse.json();
-          if (!createdResponse.ok)
-            throw new Error(created.error || "Could not start film processing");
+          const poster = await createVideoPoster(file);
+          const posterKey = await signed(
+            poster,
+            `${file.name}.poster.jpg`,
+            "video-poster",
+            slug,
+          );
           const media = [
             ...galleryRef.current.media,
             {
@@ -489,7 +527,7 @@ function Editor({
               alt: "",
               filename: file.name,
               originalKey,
-              assetId: created.assetId,
+              posterUrl: `${API}/media/${posterKey}`,
             },
           ];
           const updated = { ...galleryRef.current, slug, media };
@@ -505,7 +543,6 @@ function Editor({
     setProgress(0);
     setUploadStage("uploading");
     setProcessingStartedAt(null);
-    setMuxProgress({ state: null, percentage: null });
   }
   return (
     <main className="gm">
@@ -619,19 +656,11 @@ function Editor({
                 <>
                   <b className="processing-spinner" aria-hidden="true" />
                   <div>
-                    <strong>Processing film for streaming…</strong>
+                    <strong>Creating the film cover…</strong>
                     <small>
                       {uploading} · {formatElapsed(elapsedSeconds)} elapsed
-                      {muxProgress.state
-                        ? ` · ${formatMuxState(muxProgress.state)}`
-                        : ""}
-                      {muxProgress.percentage !== null &&
-                      muxProgress.percentage > 0 &&
-                      muxProgress.percentage < 100
-                        ? ` · ${Math.round(muxProgress.percentage)}%`
-                        : ""}
                     </small>
-                    <small>Usually ready within a few minutes</small>
+                    <small>Saving the first frame as the default cover</small>
                   </div>
                 </>
               ) : (
@@ -643,6 +672,15 @@ function Editor({
               )}
             </div>
           )}
+          <div className="media-section-title">
+            <div>
+              <small>Photography</small>
+              <strong>
+                {gallery.media.filter((item) => item.type === "photo").length} photos
+              </strong>
+            </div>
+            <span>Drag to reorder · First photo is the gallery cover</span>
+          </div>
           <div className="gm-photos">
             {gallery.media
               .filter((x) => x.type === "photo")
@@ -672,11 +710,20 @@ function Editor({
                 </figure>
               ))}
           </div>
+          <div className="media-section-title films-title">
+            <div>
+              <small>Films</small>
+              <strong>
+                {gallery.media.filter((item) => item.type === "video").length} films
+              </strong>
+            </div>
+            <span>Every film includes a cover</span>
+          </div>
           {gallery.media
             .filter((x) => x.type === "video")
             .map((v) => (
               <div
-                className={`film ${!v.playbackId ? "is-processing" : ""}`}
+                className={`film ${v.assetId && !v.playbackId ? "is-processing" : ""}`}
                 key={v.id}
                 draggable
                 onDragStart={() => setDraggedMediaId(v.id)}
@@ -689,7 +736,7 @@ function Editor({
                     <img src={v.posterUrl} alt="" />
                   ) : v.playbackId ? (
                     <img
-                      src={`https://image.mux.com/${v.playbackId}/thumbnail.webp?width=360&fit_mode=smartcrop`}
+                      src={`https://image.mux.com/${v.playbackId}/thumbnail.webp?time=0&width=360&fit_mode=smartcrop`}
                       alt=""
                     />
                   ) : (
@@ -712,7 +759,12 @@ function Editor({
                     }}
                     onBlur={() => void persist(galleryRef.current)}
                   />
-                  {!v.playbackId && (
+                  {!v.assetId && (
+                    <small>
+                      Ready in draft · Streaming starts only when you publish
+                    </small>
+                  )}
+                  {v.assetId && !v.playbackId && (
                     <small>
                       {formatMuxState(videoStates[v.id] || "preparing")} in the
                       background · Safe to close this page
@@ -834,4 +886,40 @@ function formatMuxState(state: string) {
     : state === "ingesting"
       ? "Preparing"
       : "Processing";
+}
+
+async function createVideoPoster(file: File) {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.src = url;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.min(0.1, Math.max(0, video.duration || 0));
+      };
+      video.onseeked = () => resolve();
+      video.onerror = () => reject(new Error("Could not create film cover"));
+    });
+    const max = 1600,
+      scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight)),
+      canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    canvas
+      .getContext("2d")!
+      .drawImage(video, 0, 0, canvas.width, canvas.height);
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (blob) =>
+          blob ? resolve(blob) : reject(new Error("Could not create cover")),
+        "image/jpeg",
+        0.86,
+      ),
+    );
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
