@@ -341,7 +341,7 @@ export default function CoupleGallery() {
         )}
         {activePhoto !== null && (
           <div
-            className="dynamic-lightbox"
+            className="dynamic-lightbox rzl"
             role="dialog"
             aria-modal="true"
             aria-label={`${names} photo viewer`}
@@ -415,7 +415,7 @@ export default function CoupleGallery() {
               onClick={() => setActivePhoto(null)}
               aria-label="Close photo viewer"
             >
-              ×
+              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
             <button
               className="lightbox-arrow is-previous"
@@ -425,7 +425,7 @@ export default function CoupleGallery() {
                 changePhoto(-1);
               }}
             >
-              ←
+              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
             <img
               onClick={(e) => e.stopPropagation()}
@@ -477,10 +477,11 @@ export default function CoupleGallery() {
               {String(photos.length).padStart(2, "0")}
             </span>
             <a
-              className="original-download"
+              className="original-download rzl-download"
+              onClick={(event) => event.stopPropagation()}
               href={`${API}/api/download?key=${encodeURIComponent(photos[activePhoto].originalKey)}&name=${encodeURIComponent(photos[activePhoto].filename)}`}
             >
-              Download original
+              <FilmIcon name="cloud" /> Download original
             </a>
             <button
               className="lightbox-arrow is-next"
@@ -490,7 +491,7 @@ export default function CoupleGallery() {
                 changePhoto(1);
               }}
             >
-              →
+              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
           </div>
         )}
