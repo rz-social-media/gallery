@@ -150,7 +150,7 @@ async function crcOf(stream: ReadableStream<Uint8Array>) {
 
 export function zipStream(entries: ZipEntry[]) {
   const { readable, writable } = new FixedLengthStream(zipLength(entries));
-  const writer = writable.getWriter();
+  let writer = writable.getWriter();
   (async () => {
     const central: Uint8Array[] = [];
     let offset = 0;
@@ -168,12 +168,10 @@ export function zipStream(entries: ZipEntry[]) {
         await writer.write(header);
         const body = await entry.open();
         if (!body) throw new Error(`Missing ${entry.name}`);
-        const reader = body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          await writer.write(value);
-        }
+        // pipeTo runs natively in the runtime, so file bytes cost no JS CPU time.
+        writer.releaseLock();
+        await body.pipeTo(writable, { preventClose: true });
+        writer = writable.getWriter();
         central.push(centralHeader(name, entry, crc, offset));
         offset += header.length + entry.size;
       }
