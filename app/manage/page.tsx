@@ -1,5 +1,5 @@
 "use client";
-import { createSHA256 } from "hash-wasm";
+import { createCRC32, createSHA256 } from "hash-wasm";
 import { useEffect, useRef, useState } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
@@ -16,6 +16,8 @@ type Media = {
   posterUrl?: string;
   filename: string;
   sha256?: string;
+  crc32?: number;
+  size?: number;
 };
 type QueueItem = {
   id: string;
@@ -706,6 +708,52 @@ function Editor({
     });
     if (!response.ok) throw new Error("Could not save gallery progress");
   }
+  // Older uploads have no stored checksum; the ZIP download needs one per file.
+  const missingChecksums = gallery.media.filter((item) => typeof item.crc32 !== "number" && item.originalKey).map((item) => item.id).join(",");
+  const [checksumProgress, setChecksumProgress] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!missingChecksums || !gallery.slug || uploading) return;
+    let stopped = false;
+    (async () => {
+      const ids = missingChecksums.split(",");
+      setChecksumProgress({ done: 0, total: ids.length });
+      for (const [index, id] of ids.entries()) {
+        if (stopped) return;
+        const item = galleryRef.current.media.find((media) => media.id === id);
+        if (!item) continue;
+        try {
+          const response = await fetch(`${API}/api/download?key=${encodeURIComponent(item.originalKey)}&name=checksum`);
+          if (!response.ok || !response.body) continue;
+          const hash = await createCRC32();
+          hash.init();
+          let size = 0;
+          const reader = response.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.length;
+            hash.update(value);
+          }
+          if (stopped) return;
+          const crc32 = parseInt(hash.digest("hex"), 16);
+          const updated = {
+            ...galleryRef.current,
+            media: galleryRef.current.media.map((media) => (media.id === id ? { ...media, crc32, size } : media)),
+          };
+          galleryRef.current = updated;
+          change(updated);
+          await persist(updated);
+        } catch {
+          // Leave it for the next visit; the Worker can still compute it.
+        }
+        setChecksumProgress({ done: index + 1, total: ids.length });
+      }
+      setChecksumProgress(null);
+    })();
+    return () => {
+      stopped = true;
+    };
+  }, [missingChecksums, gallery.slug, uploading]);
   useEffect(() => {
     const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
     if (!slug || !gallery.partnerOne || !gallery.partnerTwo) return;
@@ -955,6 +1003,15 @@ function Editor({
     }
     return hash.digest("hex");
   }
+  async function checksum(file: Blob) {
+    const hash = await createCRC32();
+    hash.init();
+    const chunkSize = 8 * 1024 * 1024;
+    for (let offset = 0; offset < file.size; offset += chunkSize) {
+      hash.update(new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer()));
+    }
+    return parseInt(hash.digest("hex"), 16);
+  }
   async function addFiles(files: File[], retryIds?: string[]) {
     if (uploading || !files.length) return;
     const slug =
@@ -983,7 +1040,7 @@ function Editor({
       setUploadStage("uploading");
       setProcessingStartedAt(null);
       try {
-        const sha256 = await fingerprint(file);
+        const [sha256, crc32] = await Promise.all([fingerprint(file), checksum(file)]);
         if (
           galleryRef.current.media.some(
             (item) => item.type === (file.type.startsWith("image/") ? "photo" : "video") && item.sha256 === sha256,
@@ -1012,6 +1069,8 @@ function Editor({
               alt: file.name,
               filename: file.name,
               sha256,
+              crc32,
+              size: file.size,
               originalKey,
               url: `${API}/media/${webKey}`,
             },
@@ -1043,6 +1102,8 @@ function Editor({
               alt: "",
               filename: file.name,
               sha256,
+              crc32,
+              size: file.size,
               originalKey,
               posterUrl: `${API}/media/${posterKey}`,
             },
@@ -1092,6 +1153,16 @@ function Editor({
             <small>You can leave this page. Processing continues safely in the background.</small>
           </div>
           <div className="publish-progress-dots" aria-hidden="true"><i /><i /><i /></div>
+        </aside>
+      )}
+      {checksumProgress && (
+        <aside className="publish-progress" role="status" aria-live="polite">
+          <b className="processing-spinner" aria-hidden="true" />
+          <div>
+            <strong>Preparing full-quality ZIP downloads</strong>
+            <p>{checksumProgress.total - checksumProgress.done} files left to check</p>
+            <small>One-time step for files uploaded before this update. Keep this page open until it finishes.</small>
+          </div>
         </aside>
       )}
       {healthState && (

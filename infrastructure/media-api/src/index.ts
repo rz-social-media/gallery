@@ -1,5 +1,5 @@
 import { AwsClient } from "aws4fetch";
-import { downloadZip } from "client-zip";
+import { zipLength, zipStream, type ZipEntry } from "./zip";
 
 interface Env {
   MEDIA: R2Bucket;
@@ -300,21 +300,24 @@ async function galleryArchive(
         (selection === "videos" && item.type === "video")),
   );
   if (!media.length) return null;
-  async function* files() {
-    for (let index = 0; index < media.length; index++) {
-      const item = media[index],
-        object = await env.MEDIA.get(item.originalKey);
-      if (!object?.body) continue;
-      const folder = item.type === "photo" ? "Photos" : "Films";
-      yield {
-        name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
-        input: object.body,
-        lastModified: object.uploaded,
-      };
-    }
+  const entries: ZipEntry[] = [];
+  for (const [index, item] of media.entries()) {
+    const head = await env.MEDIA.head(item.originalKey);
+    if (!head) continue;
+    const folder = item.type === "photo" ? "Photos" : "Films";
+    entries.push({
+      name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
+      size: head.size,
+      crc32: typeof item.crc32 === "number" && item.size === head.size ? item.crc32 : undefined,
+      modified: head.uploaded,
+      open: async () => (await env.MEDIA.get(item.originalKey))?.body ?? null,
+    });
   }
-  const archive = downloadZip(files()),
-    headers = new Headers(archive.headers),
+  if (!entries.length) return null;
+  const headers = new Headers({
+      "Content-Type": "application/zip",
+      "Content-Length": String(zipLength(entries)),
+    }),
     suffix = selection === "all" ? "gallery" : selection;
   headers.set(
     "Content-Disposition",
@@ -322,7 +325,7 @@ async function galleryArchive(
   );
   headers.set("Access-Control-Allow-Origin", env.ALLOWED_ORIGIN);
   headers.set("Cache-Control", "private,no-store");
-  return new Response(archive.body, { status: 200, headers });
+  return new Response(zipStream(entries), { status: 200, headers });
 }
 function publicGalleryUrl(slug: string) {
   return `https://rz-social-media.github.io/gallery/couple/?id=${encodeURIComponent(slug)}`;
