@@ -3368,3 +3368,291 @@ a:focus-visible {
     animation: none;
   }
 }
+
+/* ===== Couple films page (reference-matched, measured on a 2000px-wide frame) ===== */
+.rzf {
+  --card-w: 23.5vw;
+  --card-gap: .9vw;
+  --rail-pad-y: 3vw;
+  --tan: #b8a084;
+  position: relative;
+  height: 100svh;
+  min-height: 520px;
+  overflow: hidden;
+  background: #0a0806;
+  color: #fff;
+  font-family: "Montserrat", Arial, sans-serif;
+}
+.rzf-background {
+  --controls: none;
+  --media-object-fit: cover;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.rzf-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(0deg, rgba(0, 0, 0, .5) 0%, rgba(0, 0, 0, 0) 38%),
+    linear-gradient(90deg, rgba(0, 0, 0, .22) 0%, rgba(0, 0, 0, 0) 55%),
+    rgba(0, 0, 0, .14);
+}
+.rzf-icon { display: block; width: 100%; height: 100%; }
+
+.rzf-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: .95vw 1.25vw 0 1.1vw;
+}
+.rzf-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.1vw;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+.rzf-seal {
+  width: max(44px, 3.8vw);
+  height: max(44px, 3.8vw);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #2a211b;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: max(14px, 1.15vw);
+  letter-spacing: .02em;
+  box-shadow: 0 0 0 max(3px, .25vw) rgba(255, 255, 255, .35);
+}
+.rzf-brand-name {
+  font-size: max(12px, .95vw);
+  font-weight: 500;
+  letter-spacing: .01em;
+}
+.rzf-actions {
+  display: flex;
+  gap: .65vw;
+  margin-top: .55vw;
+}
+.rzf-circle {
+  width: max(38px, 2.7vw);
+  height: max(38px, 2.7vw);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: background .25s ease;
+}
+.rzf-circle:hover { background: rgba(255, 255, 255, .34); }
+.rzf-circle:first-child .rzf-icon { width: 52%; height: 52%; }
+.rzf-circle:last-child .rzf-icon { width: 40%; height: 40%; }
+
+.rzf-copy {
+  position: absolute;
+  z-index: 3;
+  left: 2.6vw;
+  top: 27.2%;
+}
+.rzf-copy h1 {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 4.6vw;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.rzf-play-all {
+  margin-top: 3.7vw;
+  width: 10.15vw;
+  min-width: 150px;
+  height: 2.7vw;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: .7vw;
+  padding: 0 0 0 1.35vw;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(184, 160, 132, .9);
+  color: #fff;
+  font-family: "Montserrat", Arial, sans-serif;
+  font-size: max(14px, 1.2vw);
+  font-weight: 500;
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: background .25s ease;
+}
+.rzf-play-all:hover { background: rgba(196, 172, 143, .96); }
+.rzf-play-all .rzf-icon { width: max(18px, 1.2vw); height: max(18px, 1.2vw); flex: none; }
+.rzf-play-all .rzf-icon path { fill: var(--tan); }
+
+.rzf-rail-wrap {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: calc(5.8vh - var(--rail-pad-y));
+}
+.rzf-rail {
+  display: flex;
+  gap: var(--card-gap);
+  padding: var(--rail-pad-y) 2.85vw;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.rzf-rail::-webkit-scrollbar { display: none; }
+.rzf-card {
+  position: relative;
+  flex: 0 0 var(--card-w);
+  aspect-ratio: 1.626 / 1;
+  border-radius: .8vw;
+  overflow: hidden;
+  background: #17120f;
+  transition: transform .5s cubic-bezier(.22, .8, .24, 1), box-shadow .5s ease;
+  will-change: transform;
+}
+.rzf-card > button {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.rzf-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity .35s ease;
+}
+.rzf-preview {
+  --controls: none;
+  --media-object-fit: cover;
+  --media-background-color: transparent;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s ease;
+}
+.rzf-card-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, .55) 100%);
+}
+.rzf-card-copy {
+  position: absolute;
+  left: .95vw;
+  right: .95vw;
+  bottom: .95vw;
+  z-index: 2;
+}
+.rzf-card-copy strong {
+  display: block;
+  font-size: max(13px, 1.1vw);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rzf-card-copy small {
+  display: flex;
+  align-items: center;
+  gap: .45vw;
+  margin-top: .6vw;
+  color: rgba(255, 255, 255, .62);
+  font-size: max(10px, .75vw);
+  font-weight: 400;
+  letter-spacing: .02em;
+}
+.rzf-card-copy small .rzf-icon { width: max(9px, .62vw); height: max(9px, .62vw); }
+.rzf-card-play {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: 4.2vw;
+  height: 3vw;
+  display: grid;
+  place-items: center;
+  border-radius: .35vw;
+  background: rgba(255, 255, 255, .8);
+  color: #1d1916;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.rzf-card-play .rzf-icon { width: 1.7vw; height: 1.7vw; }
+
+@media (hover: hover) and (pointer: fine) {
+  .rzf-card:hover {
+    z-index: 2;
+    transform: translateX(-2.6%) scale(1.1);
+    box-shadow: 0 1.6vw 3.6vw rgba(0, 0, 0, .45);
+  }
+  .rzf-card:hover ~ .rzf-card { transform: translateX(2.8%); }
+  .rzf-card:has(~ .rzf-card:hover) { transform: translateX(-7.8%); }
+  .rzf-card:hover .rzf-preview { opacity: 1; }
+  .rzf-card:hover .rzf-card-play { opacity: 1; }
+}
+
+.rzf-next {
+  position: absolute;
+  z-index: 6;
+  top: var(--rail-pad-y);
+  right: 0;
+  width: 9vw;
+  height: calc(var(--card-w) / 1.626);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2.3vw 0 0;
+  border: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .45));
+  color: #fff;
+  cursor: pointer;
+}
+.rzf-next .rzf-icon { width: 1.45vw; height: 2.4vw; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .45)); }
+
+@media (max-width: 700px) {
+  .rzf { --card-w: 78vw; --card-gap: 10px; --rail-pad-y: 16px; }
+  .rzf-header { padding: 14px 16px 0; }
+  .rzf-brand { gap: 12px; }
+  .rzf-actions { margin-top: 3px; gap: 8px; }
+  .rzf-copy { left: 16px; right: 16px; top: 22%; }
+  .rzf-copy h1 { font-size: clamp(2.6rem, 13vw, 4.5rem); }
+  .rzf-play-all { margin-top: 22px; }
+  .rzf-rail-wrap { bottom: calc(84px - var(--rail-pad-y)); }
+  .rzf-rail { padding: var(--rail-pad-y) 16px; scroll-snap-type: x mandatory; }
+  .rzf-card { border-radius: 14px; scroll-snap-align: start; }
+  .rzf-card-copy { left: 14px; bottom: 14px; }
+  .rzf-card-copy small { gap: 6px; margin-top: 6px; }
+  .rzf-next { display: none; }
+}

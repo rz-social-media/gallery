@@ -499,11 +499,12 @@ export default function CoupleGallery() {
     );
   if (view === "films")
     return (
-      <main className="dynamic-films cinematic-films">
+      <main className="rzf">
         {featuredFilm?.playbackId && (
           <MuxPlayer
-            className="cinematic-film-background"
+            className="rzf-background"
             playbackId={featuredFilm.playbackId}
+            defaultHiddenCaptions
             muted
             autoPlay
             loop
@@ -517,87 +518,87 @@ export default function CoupleGallery() {
             title={`${names} background film`}
           />
         )}
-        <div className="cinematic-film-shade" />
-        <header className="cinematic-film-header">
-          <button className="cinematic-brand" onClick={backHome}>
-            <span className="brand-seal">RZ</span>
-            <span><strong>RZ.SOCIAL.MEDIA</strong><small>BACK TO GALLERY⌄</small></span>
+        <div className="rzf-shade" />
+        <header className="rzf-header">
+          <button className="rzf-brand" onClick={backHome} aria-label="Back to gallery">
+            <span className="rzf-seal">RZ</span>
+            <span className="rzf-brand-name">RZ.SOCIAL.MEDIA</span>
           </button>
-          <div>
+          <div className="rzf-actions">
             <a
-              className="cinematic-circle-action"
+              className="rzf-circle"
               href={downloadUrl("videos")}
               onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "videos"); }}
               aria-label="Download all films"
+              title="Download all films"
             >
-              <Icon name="download" />
+              <FilmIcon name="cloud" />
             </a>
-            <button className="cinematic-circle-action" onClick={() => void shareGallery()} aria-label="Share gallery">
-              <Icon name="share" />
+            <button className="rzf-circle" onClick={() => void shareGallery()} aria-label="Share gallery" title="Share">
+              <FilmIcon name="share" />
             </button>
           </div>
         </header>
-        <section className="dynamic-film-copy">
+        <section className="rzf-copy">
           <h1>{names}</h1>
-          <button className="cinematic-play-all" onClick={() => openFilm(0)}>
-            <span><Icon name="play" /></span> PLAY ALL
+          <button className="rzf-play-all" onClick={() => openFilm(0)}>
+            <FilmIcon name="playCircle" /> PLAY ALL
           </button>
         </section>
-        <section className="dynamic-film-rail" ref={filmRail}>
-          {films.map((film, index) => (
-            <article
-              key={film.id}
-              onMouseEnter={(event) => {
-                if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-                const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { play?: () => Promise<void> }) | null;
-                void player?.play?.().catch(() => undefined);
-              }}
-              onMouseLeave={(event) => {
-                const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { pause?: () => void; currentTime?: number }) | null;
-                player?.pause?.();
-                if (player) player.currentTime = 0;
-              }}
-            >
-              <button onClick={() => openFilm(index)}>
-                <img
-                  src={
-                    film.posterUrl ||
-                    `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
-                  }
-                  alt=""
-                />
-                <MuxPlayer
-                  className="film-hover-preview"
-                  playbackId={`${film.playbackId}?max_resolution=720p`}
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  title={`${film.title || "Wedding film"} preview`}
-                />
-                <span className="film-card-play"><Icon name="play" /></span>
-                <strong>{film.title || "Wedding film"}<small><Icon name="play" /> PLAY FILM</small></strong>
-              </button>
-              <a
-                className="media-card-download"
-                href={`${API}/api/download?key=${encodeURIComponent(film.originalKey)}&name=${encodeURIComponent(film.filename)}`}
-                aria-label={`Download ${film.title || film.filename}`}
-                title="Download film"
+        <div className="rzf-rail-wrap">
+          <section className="rzf-rail" ref={filmRail}>
+            {films.map((film, index) => (
+              <article
+                key={film.id}
+                className="rzf-card"
+                onMouseEnter={(event) => {
+                  if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+                  const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { play?: () => Promise<void> }) | null;
+                  void player?.play?.().catch(() => undefined);
+                }}
+                onMouseLeave={(event) => {
+                  const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { pause?: () => void; currentTime?: number }) | null;
+                  player?.pause?.();
+                  if (player) player.currentTime = 0;
+                }}
               >
-                ↓
-              </a>
-            </article>
-          ))}
-        </section>
-        {films.length > 3 && (
-          <button
-            className="cinematic-rail-next"
-            aria-label="More films"
-            onClick={() => filmRail.current?.scrollBy({ left: filmRail.current.clientWidth * .72, behavior: "smooth" })}
-          >
-            ›
-          </button>
-        )}
+                <button onClick={() => openFilm(index)} aria-label={`Play ${film.title || "wedding film"}`}>
+                  <img
+                    src={
+                      film.posterUrl ||
+                      `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
+                    }
+                    alt=""
+                  />
+                  <MuxPlayer
+                    className="rzf-preview"
+                    playbackId={`${film.playbackId}?max_resolution=720p`}
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    title={`${film.title || "Wedding film"} preview`}
+                  />
+                  <span className="rzf-card-shade" />
+                  <span className="rzf-card-play"><FilmIcon name="play" /></span>
+                  <span className="rzf-card-copy">
+                    <strong>{film.title || "Wedding film"}</strong>
+                    <small><FilmIcon name="play" /> PLAY FILM</small>
+                  </span>
+                </button>
+              </article>
+            ))}
+          </section>
+          {films.length > 3 && (
+            <button
+              className="rzf-next"
+              aria-label="More films"
+              onClick={() => filmRail.current?.scrollBy({ left: filmRail.current.clientWidth * .72, behavior: "smooth" })}
+            >
+              <FilmIcon name="chevron" />
+            </button>
+          )}
+        </div>
         {activeFilm !== null && (
           <div className="player-modal" onClick={() => setActiveFilm(null)}>
             <button
@@ -806,6 +807,18 @@ function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back"
     play: <path d="m9 7 8 5-8 5Z" fill="currentColor" stroke="none"/>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+}
+function FilmIcon({ name }: { name: "cloud" | "share" | "playCircle" | "play" | "chevron" }) {
+  if (name === "chevron")
+    return <svg className="rzf-icon" viewBox="0 0 24 40" aria-hidden="true"><path d="M5 4l15 16L5 36" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  if (name === "playCircle")
+    return <svg className="rzf-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M9.6 7.4v9.2l7.2-4.6z" fill="currentColor"/></svg>;
+  const paths = {
+    cloud: "M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.240 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z",
+    share: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.250.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z",
+    play: "M7 4.5v15l12.5-7.5z",
+  };
+  return <svg className="rzf-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} fill="currentColor"/></svg>;
 }
 function DynamicHeader({ names, back, action }: { names: string; back: () => void; action?: ReactNode }) {
   return (
