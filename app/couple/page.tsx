@@ -164,34 +164,51 @@ export default function CoupleGallery() {
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
   const mobileDownloadUrl = (type: "all" | "photos" | "videos") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
-  const adaptDownload = (
+  const startDownload = async (
     event: ReactMouseEvent<HTMLAnchorElement>,
-    type: "all" | "photos" | "videos",
+    zipUrl: string,
+    mobileUrl: string,
   ) => {
+    event.preventDefault();
+    if (downloadFeedback !== "idle") return;
     void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "download" }),
-    });
-    if (
-      window.matchMedia("(pointer: coarse)").matches ||
-      window.innerWidth <= 760
-    ) {
-      event.preventDefault();
-      window.location.href = mobileDownloadUrl(type);
-    }
-  };
-  const showDownloadFeedback = () => {
+    }).catch(() => undefined);
     setDownloadFeedback("preparing");
-    window.setTimeout(() => setDownloadFeedback("started"), 650);
-    window.setTimeout(() => setDownloadFeedback("idle"), 2800);
+    if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760) {
+      window.location.href = mobileUrl;
+      window.setTimeout(() => setDownloadFeedback("idle"), 8000);
+      return;
+    }
+    try {
+      // HEAD runs the same preparation as the download and returns once the ZIP is ready to stream.
+      await fetch(zipUrl, { method: "HEAD" });
+    } catch {
+      // Fall through: the real download will surface any error.
+    }
+    const link = document.createElement("a");
+    link.href = zipUrl;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => setDownloadFeedback("started"), 900);
+    window.setTimeout(() => setDownloadFeedback("idle"), 3200);
   };
   const downloadLabel = (fallback: string) =>
     downloadFeedback === "preparing"
-      ? "Preparing download…"
+      ? "Preparing…"
       : downloadFeedback === "started"
         ? "Download started"
         : fallback;
+  const downloadToast = downloadFeedback !== "idle" && (
+    <div className={`rz-download-toast is-${downloadFeedback}`} role="status" aria-live="polite">
+      {downloadFeedback === "preparing" ? <span className="rz-download-spinner" aria-hidden="true" /> : <span className="rz-download-check" aria-hidden="true">✓</span>}
+      <span>{downloadFeedback === "preparing" ? "Preparing your ZIP…" : "Your download has started"}</span>
+    </div>
+  );
   const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${gallery.updatedAt ? `?v=${encodeURIComponent(gallery.updatedAt)}` : ""}`;
   const shareGallery = async () => {
     if (navigator.share) {
@@ -282,6 +299,7 @@ export default function CoupleGallery() {
   if (view === "photos")
     return (
       <main className="dynamic-photos">
+        {downloadToast}
         <DynamicHeader names={names} back={backHome} />
         <section className="photo-utility-bar" aria-label="Photography actions">
           <span><Icon name="photo" /> Photography</span>
@@ -298,7 +316,7 @@ export default function CoupleGallery() {
             <a
               className="page-download-all"
               href={downloadUrl("photos")}
-              onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "photos"); }}
+              onClick={(event) => void startDownload(event, downloadUrl("photos"), mobileDownloadUrl("photos"))}
             >
               <Icon name="download" /> {downloadLabel("Download all photos")}
             </a>
@@ -327,13 +345,13 @@ export default function CoupleGallery() {
             </button>
             <a
               href={`${downloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`}
-              onClick={(event) => {
-                showDownloadFeedback();
-                if (window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760) {
-                  event.preventDefault();
-                  window.location.href = `${mobileDownloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`;
-                }
-              }}
+              onClick={(event) =>
+                void startDownload(
+                  event,
+                  `${downloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`,
+                  `${mobileDownloadUrl("photos")}&ids=${encodeURIComponent(selectedPhotos.join(","))}`,
+                )
+              }
             >
               <Icon name="download" /> {downloadLabel("Download selected")}
             </a>
@@ -501,6 +519,7 @@ export default function CoupleGallery() {
   if (view === "films")
     return (
       <main className="rzf">
+        {downloadToast}
         {featuredFilm?.playbackId && (
           <MuxPlayer
             className="rzf-background"
@@ -529,7 +548,7 @@ export default function CoupleGallery() {
             <a
               className="rzf-circle"
               href={downloadUrl("videos")}
-              onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "videos"); }}
+              onClick={(event) => void startDownload(event, downloadUrl("videos"), mobileDownloadUrl("videos"))}
               aria-label="Download all films"
               title="Download all films"
             >
@@ -601,6 +620,7 @@ export default function CoupleGallery() {
     );
   return (
     <main className="dynamic-home">
+        {downloadToast}
       <div
         className="dynamic-cover"
         style={coverStyle}
@@ -611,7 +631,7 @@ export default function CoupleGallery() {
         <a
           className="home-top-download"
           href={downloadUrl("all")}
-          onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "all"); }}
+          onClick={(event) => void startDownload(event, downloadUrl("all"), mobileDownloadUrl("all"))}
         >
           <Icon name="download" /> {downloadLabel("Download all")}
         </a>

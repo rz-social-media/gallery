@@ -290,6 +290,7 @@ async function galleryArchive(
   slug: string,
   selection: "all" | "photos" | "videos",
   selectedIds?: Set<string>,
+  headOnly = false,
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
@@ -300,19 +301,29 @@ async function galleryArchive(
         (selection === "videos" && item.type === "video")),
   );
   if (!media.length) return null;
-  const entries: ZipEntry[] = [];
-  for (const [index, item] of media.entries()) {
-    const head = await env.MEDIA.head(item.originalKey);
-    if (!head) continue;
-    const folder = item.type === "photo" ? "Photos" : "Films";
-    entries.push({
-      name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
-      size: head.size,
-      crc32: typeof item.crc32 === "number" && item.size === head.size ? item.crc32 : undefined,
-      modified: head.uploaded,
-      open: async () => (await env.MEDIA.get(item.originalKey))?.body ?? null,
-    });
-  }
+  // Sizes and checksums stored at upload (measured from the real bytes) avoid a
+  // storage lookup per file; only items missing them are checked, in parallel.
+  const modified = new Date(gallery.updatedAt || Date.now());
+  const resolved: (ZipEntry | null)[] = new Array(media.length).fill(null);
+  const pending = media.map((item: Record<string, any>, index: number) => ({ item, index }));
+  const worker = async () => {
+    for (let next = pending.shift(); next; next = pending.shift()) {
+      const { item, index } = next;
+      const known = typeof item.crc32 === "number" && typeof item.size === "number";
+      const head = known ? null : await env.MEDIA.head(item.originalKey);
+      if (!known && !head) continue;
+      const folder = item.type === "photo" ? "Photos" : "Films";
+      resolved[index] = {
+        name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
+        size: known ? item.size : head!.size,
+        crc32: known || (typeof item.crc32 === "number" && item.size === head!.size) ? item.crc32 : undefined,
+        modified: head?.uploaded || modified,
+        open: async () => (await env.MEDIA.get(item.originalKey))?.body ?? null,
+      };
+    }
+  };
+  await Promise.all(Array.from({ length: 24 }, worker));
+  const entries = resolved.filter((entry): entry is ZipEntry => entry !== null);
   if (!entries.length) return null;
   const headers = new Headers({
       "Content-Type": "application/zip",
@@ -325,7 +336,7 @@ async function galleryArchive(
   );
   headers.set("Access-Control-Allow-Origin", env.ALLOWED_ORIGIN);
   headers.set("Cache-Control", "private,no-store");
-  return new Response(zipStream(entries), { status: 200, headers });
+  return new Response(headOnly ? null : zipStream(entries), { status: 200, headers });
 }
 function publicGalleryUrl(slug: string) {
   return `https://rz-social-media.github.io/gallery/couple/?id=${encodeURIComponent(slug)}`;
@@ -710,7 +721,7 @@ export default {
       const archiveMatch = url.pathname.match(
         /^\/api\/galleries\/([^/]+)\/download$/,
       );
-      if (archiveMatch && request.method === "GET") {
+      if (archiveMatch && (request.method === "GET" || request.method === "HEAD")) {
         const slug = safeSlug(archiveMatch[1]),
           selection = url.searchParams.get("type") || "all";
         if (!["all", "photos", "videos"].includes(selection))
@@ -729,6 +740,7 @@ export default {
           slug,
           selection as "all" | "photos" | "videos",
           selectedIds,
+          request.method === "HEAD",
         );
         return archive || json({ error: "No files to download" }, 404, origin);
       }
