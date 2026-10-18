@@ -1058,6 +1058,7 @@ button:disabled,
   min-height: 100svh;
   overflow: hidden;
   background: #090806;
+  font-family: "Vogue Avant Garde", Arial, sans-serif;
 }
 .cinematic-films:after { display: none; }
 .cinematic-film-background {
@@ -1097,7 +1098,7 @@ button:disabled,
   color: white;
   text-align: left;
 }
-.cinematic-brand .brand-seal { width: 66px; height: 66px; background: rgba(255,255,255,.94); color: #2a211b; border-color: rgba(255,255,255,.75); }
+.cinematic-brand .brand-seal { width: 74px; height: 74px; background: rgba(255,255,255,.94); color: #2a211b; border-color: rgba(255,255,255,.75); }
 .cinematic-brand strong { display: block; font-size: 1rem; letter-spacing: .02em; }
 .cinematic-brand small { display: block; margin-top: .55rem; color: #c7ad87; font-size: .58rem; letter-spacing: .08em; }
 .cinematic-film-header > div { display: flex; gap: .65rem; }
@@ -1116,7 +1117,7 @@ button:disabled,
 .cinematic-circle-action:hover { background: rgba(111,53,64,.82); transform: translateY(-2px); }
 .cinematic-circle-action .ui-icon { width: 20px; height: 20px; }
 .cinematic-films .dynamic-film-copy { left: 2.7vw; top: 28%; }
-.cinematic-films .dynamic-film-copy h1 { font-size: clamp(3.4rem, 6.3vw, 7rem); letter-spacing: -.035em; }
+.cinematic-films .dynamic-film-copy h1 { font-size: clamp(4rem, 5.2vw, 6.5rem); letter-spacing: -.025em; }
 .cinematic-play-all {
   margin-top: 2.2rem;
   width: 210px;
@@ -1135,10 +1136,11 @@ button:disabled,
   letter-spacing: .03em;
 }
 .cinematic-play-all span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: white; color: #b79b76; font-size: .7rem; }
+.cinematic-play-all span .ui-icon { width: 18px; height: 18px; }
 .cinematic-films .dynamic-film-rail {
   left: 0;
   right: 0;
-  bottom: 2.4vh;
+  bottom: 5.2vh;
   gap: 1vw;
   padding: 58px 0 10px 2.7vw;
   margin-top: -58px;
@@ -1163,11 +1165,12 @@ button:disabled,
   z-index: 2;
   bottom: 1.05rem;
   font-family: Arial, sans-serif;
-  font-size: clamp(1.05rem, 1vw, 1.85rem);
+  font-size: clamp(1rem, .94vw, 1.7rem);
   font-weight: 500;
   line-height: 1.1;
 }
-.cinematic-films .dynamic-film-rail strong small { display: block; margin-top: .55rem; color: #c1a47d; font-family: Arial, sans-serif; font-size: clamp(.68rem, .66vw, 1.15rem); font-weight: 400; letter-spacing: .035em; }
+.cinematic-films .dynamic-film-rail strong small { display: block; margin-top: .55rem; color: #c1a47d; font-family: Arial, sans-serif; font-size: clamp(.65rem, .62vw, 1.05rem); font-weight: 400; letter-spacing: .025em; }
+.cinematic-films .dynamic-film-rail strong small .ui-icon { width: 13px; height: 13px; margin-right: .28rem; vertical-align: -2px; }
 .cinematic-films .film-card-play {
   z-index: 3;
   top: 50%;
@@ -1186,6 +1189,7 @@ button:disabled,
   opacity: 0;
   transition: opacity .2s ease;
 }
+.cinematic-films .film-card-play .ui-icon { width: 34px; height: 34px; }
 .cinematic-films .dynamic-film-rail article:hover .film-card-play { opacity: 1; }
 .cinematic-films .film-hover-preview { --media-object-fit: cover; }
 @media (hover: hover) and (pointer: fine) {
@@ -1194,21 +1198,21 @@ button:disabled,
     transform: translateY(-10px) scale(1.1);
     box-shadow: 0 30px 80px rgba(0,0,0,.62);
   }
-  .cinematic-films .dynamic-film-rail article:hover strong { font-size: clamp(1.1rem, 1.05vw, 1.95rem); }
+  .cinematic-films .dynamic-film-rail article:hover strong { font-size: clamp(1.05rem, .98vw, 1.8rem); }
   .cinematic-films .dynamic-film-rail article:hover .media-card-download { opacity: 1; }
 }
 .cinematic-rail-next {
   position: absolute;
   z-index: 12;
-  right: 1.15vw;
-  bottom: 14.5vh;
-  width: 62px;
-  height: 92px;
+  right: 0;
+  bottom: 5.2vh;
+  width: 7vw;
+  height: calc(23.45vw / 1.62);
   border: 0;
-  background: transparent;
+  background: linear-gradient(90deg, transparent, rgba(8,6,5,.72));
   color: white;
   font-family: Arial, sans-serif;
-  font-size: 6rem;
+  font-size: clamp(5rem, 5.2vw, 9rem);
   font-weight: 200;
   line-height: .7;
   text-shadow: 0 5px 20px rgba(0,0,0,.65);
@@ -1225,6 +1229,10 @@ button:disabled,
   .cinematic-films .dynamic-film-rail { left: 0; bottom: 84px; gap: 10px; padding: 44px 0 6px 1rem; margin-top: -44px; }
   .cinematic-films .dynamic-film-rail article { flex-basis: 78vw; aspect-ratio: 1.62 / 1; border-radius: 15px; }
   .cinematic-rail-next { display: none; }
+  .player-modal { padding: 0; background: #000; backdrop-filter: none; }
+  .player-frame { width: 100vw; height: 100svh; border: 0; border-radius: 0; }
+  .player-frame mux-player { width: 100%; height: 100%; aspect-ratio: auto; }
+  .player-frame .video-download { display: none; }
 }
 @media (max-width: 700px) {
   .gm-quick-preview { display: none; }

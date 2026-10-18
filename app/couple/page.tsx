@@ -1,6 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
+import type MuxPlayerElement from "@mux/mux-player";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -46,6 +47,8 @@ export default function CoupleGallery() {
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const wheelLocked = useRef(false);
   const filmRail = useRef<HTMLElement | null>(null);
+  const activePlayer = useRef<MuxPlayerElement | null>(null);
+  const fullscreenRequested = useRef(false);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const touchPoints = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
@@ -265,6 +268,16 @@ export default function CoupleGallery() {
         ? null
         : (current + direction + photos.length) % photos.length,
     );
+  };
+  const openFilm = (index: number) => {
+    fullscreenRequested.current =
+      window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760;
+    setActiveFilm(index);
+    void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "play" }),
+    });
   };
   if (view === "photos")
     return (
@@ -496,6 +509,11 @@ export default function CoupleGallery() {
             loop
             playsInline
             preload="auto"
+            maxResolution="2160p"
+            maxAutoResolution="2160p"
+            renditionOrder="desc"
+            capRenditionToPlayerSize={false}
+            initialBandwidthEstimateKbps={50000}
             title={`${names} background film`}
           />
         )}
@@ -521,8 +539,8 @@ export default function CoupleGallery() {
         </header>
         <section className="dynamic-film-copy">
           <h1>{names}</h1>
-          <button className="cinematic-play-all" onClick={() => setActiveFilm(0)}>
-            <span>▶</span> PLAY ALL
+          <button className="cinematic-play-all" onClick={() => openFilm(0)}>
+            <span><Icon name="play" /></span> PLAY ALL
           </button>
         </section>
         <section className="dynamic-film-rail" ref={filmRail}>
@@ -540,14 +558,7 @@ export default function CoupleGallery() {
                 if (player) player.currentTime = 0;
               }}
             >
-              <button onClick={() => {
-                setActiveFilm(index);
-                void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ type: "play" }),
-                });
-              }}>
+              <button onClick={() => openFilm(index)}>
                 <img
                   src={
                     film.posterUrl ||
@@ -564,8 +575,8 @@ export default function CoupleGallery() {
                   preload="metadata"
                   title={`${film.title || "Wedding film"} preview`}
                 />
-                <span className="film-card-play">▶</span>
-                <strong>{film.title || "Wedding film"}<small>▶ PLAY FILM</small></strong>
+                <span className="film-card-play"><Icon name="play" /></span>
+                <strong>{film.title || "Wedding film"}<small><Icon name="play" /> PLAY FILM</small></strong>
               </button>
               <a
                 className="media-card-download"
@@ -597,10 +608,22 @@ export default function CoupleGallery() {
             </button>
             <div className="player-frame" onClick={(e) => e.stopPropagation()}>
               <MuxPlayer
+                ref={activePlayer}
                 autoPlay
                 playbackId={films[activeFilm].playbackId!}
                 title={films[activeFilm].title}
                 accentColor="#c4a274"
+                preferPlayback="mse"
+                maxResolution="2160p"
+                maxAutoResolution="2160p"
+                renditionOrder="desc"
+                capRenditionToPlayerSize={false}
+                initialBandwidthEstimateKbps={50000}
+                onPlaying={() => {
+                  if (!fullscreenRequested.current) return;
+                  fullscreenRequested.current = false;
+                  void activePlayer.current?.requestFullscreen().catch(() => undefined);
+                }}
                 onEnded={() =>
                   setActiveFilm((current) =>
                     current === null || current >= films.length - 1 ? null : current + 1,
@@ -772,7 +795,7 @@ function MobileActionBar({ back, share, download }: { back: () => void; share: (
     </nav>
   );
 }
-function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back" | "select" }) {
+function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back" | "select" | "play" }) {
   const paths = {
     photo: <><rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="2"/><path d="m3 17 5-4 3 2 4-4 6 6"/></>,
     film: <><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M8 5v14M16 5v14M3 10h5M16 10h5M3 15h5M16 15h5"/></>,
@@ -780,6 +803,7 @@ function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back"
     share: <><circle cx="18" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="19" r="2"/><path d="m8 11 8-5M8 13l8 5"/></>,
     back: <path d="m15 18-6-6 6-6"/>,
     select: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></>,
+    play: <path d="m9 7 8 5-8 5Z" fill="currentColor" stroke="none"/>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
