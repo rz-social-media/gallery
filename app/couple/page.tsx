@@ -45,6 +45,7 @@ export default function CoupleGallery() {
   const [zoom, setZoom] = useState(1);
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const wheelLocked = useRef(false);
+  const filmRail = useRef<HTMLElement | null>(null);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const touchPoints = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
@@ -524,7 +525,7 @@ export default function CoupleGallery() {
             <span>▶</span> PLAY ALL
           </button>
         </section>
-        <section className="dynamic-film-rail">
+        <section className="dynamic-film-rail" ref={filmRail}>
           {films.map((film, index) => (
             <article
               key={film.id}
@@ -577,6 +578,15 @@ export default function CoupleGallery() {
             </article>
           ))}
         </section>
+        {films.length > 3 && (
+          <button
+            className="cinematic-rail-next"
+            aria-label="More films"
+            onClick={() => filmRail.current?.scrollBy({ left: filmRail.current.clientWidth * .72, behavior: "smooth" })}
+          >
+            ›
+          </button>
+        )}
         {activeFilm !== null && (
           <div className="player-modal" onClick={() => setActiveFilm(null)}>
             <button
