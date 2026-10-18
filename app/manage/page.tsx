@@ -17,6 +17,16 @@ type Media = {
   filename: string;
   sha256?: string;
 };
+type QueueItem = {
+  id: string;
+  name: string;
+  size: number;
+  kind: "photo" | "film";
+  status: "queued" | "uploading" | "processing" | "done" | "skipped" | "failed";
+  progress: number;
+  error?: string;
+};
+
 type Gallery = {
   slug: string;
   partnerOne: string;
@@ -65,6 +75,7 @@ export default function Manager() {
     [coverGallery, setCoverGallery] = useState<Gallery | null>(null),
     [quickCoverField, setQuickCoverField] = useState<"computerCoverUrl" | "phoneCoverUrl">("computerCoverUrl"),
     [coverUploading, setCoverUploading] = useState(false),
+    [dashboardAction, setDashboardAction] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
@@ -75,7 +86,12 @@ export default function Manager() {
   async function call(path: string, init?: RequestInit, value = code) {
     const response = await fetch(API + path, {
       ...init,
+      signal: init?.signal || AbortSignal.timeout(20000),
       headers: { ...auth(value), ...(init?.headers || {}) },
+    }).catch((error) => {
+      if (error?.name === "TimeoutError")
+        throw new Error("The server is taking too long to respond. Check the connection and try again.");
+      throw error;
     });
     const data = await response.json();
     if (!response.ok)
@@ -119,6 +135,8 @@ export default function Manager() {
     setAnalytics(Object.fromEntries(entries));
   }
   async function openQuickPreview(gallery: Gallery) {
+    setDashboardAction(`preview:${gallery.slug}`);
+    try {
     const updated = gallery.previewToken
       ? gallery
       : { ...gallery, previewToken: crypto.randomUUID() };
@@ -131,6 +149,9 @@ export default function Manager() {
       setRows((current) => current.map((item) => item.slug === gallery.slug ? updated : item));
     }
     setQuickPreview(updated);
+    } finally {
+      setDashboardAction("");
+    }
   }
   async function applyQuickCover(url: string) {
     if (!coverGallery) return;
@@ -181,13 +202,23 @@ export default function Manager() {
     }
   }
   async function openTrash() {
-    setTrashRows(await call("/api/trash"));
-    setShowTrash(true);
+    setDashboardAction("trash");
+    try {
+      setTrashRows(await call("/api/trash"));
+      setShowTrash(true);
+    } finally {
+      setDashboardAction("");
+    }
   }
   async function restoreGallery(gallery: Gallery) {
-    await call(`/api/galleries/${gallery.slug}/restore`, { method: "POST" });
-    setTrashRows((current) => current.filter((item) => item.slug !== gallery.slug));
-    await load();
+    setDashboardAction(`restore:${gallery.slug}`);
+    try {
+      await call(`/api/galleries/${gallery.slug}/restore`, { method: "POST" });
+      setTrashRows((current) => current.filter((item) => item.slug !== gallery.slug));
+      await load();
+    } finally {
+      setDashboardAction("");
+    }
   }
   async function save(g: Gallery, published: boolean) {
     const slug = g.slug || slugify(`${g.partnerOne}-${g.partnerTwo}`);
@@ -263,12 +294,15 @@ export default function Manager() {
     )
       return;
     try {
+      setDashboardAction(`delete:${gallery.slug}`);
       await call(`/api/galleries/${gallery.slug}`, { method: "DELETE" });
       setRows((current) =>
         current.filter((item) => item.slug !== gallery.slug),
       );
     } catch (error) {
       alert((error as Error).message);
+    } finally {
+      setDashboardAction("");
     }
   }
   async function copyGalleryUrl(gallery: Gallery) {
@@ -331,7 +365,7 @@ export default function Manager() {
   return (
     <main className="gm">
       <header>
-        <div>
+        <div className="gm-brand">
           <b className="gm-seal">RZ</b>
           <strong>Gallery Manager</strong>
         </div>
@@ -355,8 +389,8 @@ export default function Manager() {
             </h1>
           </div>
           <div className="gm-title-actions">
-            <button onClick={() => void openTrash()}>Trash</button>
-            <button onClick={() => setActive(blank())}>＋ New gallery</button>
+            <button className="gm-ghost" onClick={() => void openTrash()}><GmIcon name="trash" /> Trash</button>
+            <button className="primary" onClick={() => setActive(blank())}><GmIcon name="plus" /> New gallery</button>
           </div>
         </div>
         {showTrash && (
@@ -373,6 +407,14 @@ export default function Manager() {
           </section>
         )}
         <div className="gm-grid">
+          {rows.length === 0 && (
+            <div className="gm-empty">
+              <b className="gm-seal">RZ</b>
+              <h2>No galleries yet</h2>
+              <p>Create the first gallery, add the couple's names, then drop in their photos and films.</p>
+              <button className="primary" onClick={() => setActive(blank())}><GmIcon name="plus" /> New gallery</button>
+            </div>
+          )}
           {rows.map((g) => {
             const coverUrl =
               g.computerCoverUrl ||
@@ -398,7 +440,7 @@ export default function Manager() {
                   </small>
                 </button>
                 <button className="gm-quick-preview" onClick={() => void openQuickPreview(g)}>
-                  Preview
+                  <GmIcon name="eye" /> Preview
                 </button>
                 <div className="gm-card-menu">
                   <button
@@ -411,7 +453,7 @@ export default function Manager() {
                     aria-label={`Actions for ${g.partnerOne} and ${g.partnerTwo}`}
                     aria-expanded={openMenu === g.slug}
                   >
-                    •••
+                    <GmIcon name="more" />
                   </button>
                   {openMenu === g.slug && (
                     <div className="gm-card-menu-popover">
@@ -420,13 +462,13 @@ export default function Manager() {
                         onClick={() => void copyGalleryUrl(g)}
                         title={g.published ? "Copy gallery URL" : "Publish the gallery first"}
                       >
-                        <span aria-hidden="true">⧉</span> Copy URL
+                        <GmIcon name="link" /> Copy URL
                       </button>
                       <button onClick={() => { setOpenMenu(null); void openQuickPreview(g); }}>
-                        <span aria-hidden="true">◉</span> Quick Preview
+                        <GmIcon name="eye" /> Quick preview
                       </button>
                       <button onClick={() => { setOpenMenu(null); setCoverGallery(g); }}>
-                        <span aria-hidden="true">▣</span> Change Cover
+                        <GmIcon name="image" /> Change cover
                       </button>
                       <button
                         className="is-danger"
@@ -435,10 +477,7 @@ export default function Manager() {
                           void deleteFromDashboard(g);
                         }}
                       >
-                        <svg aria-hidden="true" viewBox="0 0 24 24">
-                          <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
-                        </svg>
-                        Delete Gallery
+                        <GmIcon name="trash" /> Move to trash
                       </button>
                     </div>
                   )}
@@ -469,14 +508,14 @@ export default function Manager() {
           <section>
             <div className="cover-modal-head">
               <div><small>Quick edit</small><h2>Change cover</h2></div>
-              <button onClick={() => setCoverGallery(null)}>×</button>
+              <button aria-label="Close" onClick={() => setCoverGallery(null)}><GmIcon name="close" /></button>
             </div>
             <div className="cover-targets">
               <button className={quickCoverField === "computerCoverUrl" ? "active" : ""} onClick={() => setQuickCoverField("computerCoverUrl")}>Computer Cover</button>
               <button className={quickCoverField === "phoneCoverUrl" ? "active" : ""} onClick={() => setQuickCoverField("phoneCoverUrl")}>Phone Cover</button>
             </div>
             <label className="cover-upload">
-              {coverUploading ? "Uploading…" : "＋ Upload new cover"}
+              <GmIcon name="upload" /> {coverUploading ? "Uploading…" : "Upload new cover"}
               <input hidden type="file" accept="image/*" disabled={coverUploading} onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = "";
@@ -534,7 +573,16 @@ function Editor({
     [previewMode, setPreviewMode] = useState<"computer" | "phone" | null>(null),
     [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle"),
     [healthState, setHealthState] = useState<{ ok: boolean; issues: string[] } | null>(null),
-    [checkingHealth, setCheckingHealth] = useState(false);
+    [checkingHealth, setCheckingHealth] = useState(false),
+    [queue, setQueue] = useState<QueueItem[]>([]);
+  const queueFiles = useRef<Map<string, File>>(new Map());
+  const currentQueueId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = currentQueueId.current;
+    if (id) patchQueue(id, { progress });
+  }, [progress]);
+  const patchQueue = (id: string, patch: Partial<QueueItem>) =>
+    setQueue((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   const galleryRef = useRef(gallery);
   const lastAutosaved = useRef(JSON.stringify(gallery));
   const automaticPublishStarted = useRef(false);
@@ -907,12 +955,29 @@ function Editor({
     }
     return hash.digest("hex");
   }
-  async function addFiles(files: File[]) {
+  async function addFiles(files: File[], retryIds?: string[]) {
     if (uploading || !files.length) return;
     const slug =
       gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
     if (!slug) return alert("Add both names first");
-    for (const file of files) {
+    const supported = files.filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
+    const items: QueueItem[] = supported.map((file, index) => ({
+      id: retryIds?.[index] || crypto.randomUUID(),
+      name: file.name,
+      size: file.size,
+      kind: file.type.startsWith("image/") ? "photo" : "film",
+      status: "queued",
+      progress: 0,
+    }));
+    items.forEach((item, index) => queueFiles.current.set(item.id, supported[index]));
+    setQueue((current) => {
+      const kept = current.filter((item) => item.status !== "done" && item.status !== "skipped" && !retryIds?.includes(item.id));
+      return [...kept, ...items];
+    });
+    for (const [index, file] of supported.entries()) {
+      const queueId = items[index].id;
+      currentQueueId.current = queueId;
+      patchQueue(queueId, { status: "uploading", progress: 0, error: undefined });
       setUploading(file.name);
       setProgress(0);
       setUploadStage("uploading");
@@ -923,8 +988,10 @@ function Editor({
           galleryRef.current.media.some(
             (item) => item.type === (file.type.startsWith("image/") ? "photo" : "video") && item.sha256 === sha256,
           )
-        )
+        ) {
+          patchQueue(queueId, { status: "skipped", progress: 100 });
           continue;
+        }
         if (file.type.startsWith("image/")) {
           const originalKey = await signed(file, file.name, "photo", slug, sha256),
             web = await resize(file),
@@ -957,6 +1024,7 @@ function Editor({
           const originalKey = await signed(file, file.name, "video", slug, sha256);
           setUploadStage("processing");
           setProcessingStartedAt(Date.now());
+          patchQueue(queueId, { status: "processing", progress: 100 });
           const poster = await createVideoPoster(file);
           const posterSha256 = await fingerprint(poster);
           const posterKey = await signed(
@@ -984,10 +1052,13 @@ function Editor({
           change(updated);
           await persist(updated);
         }
+        patchQueue(queueId, { status: "done", progress: 100 });
+        queueFiles.current.delete(queueId);
       } catch (e) {
-        alert((e as Error).message);
+        patchQueue(queueId, { status: "failed", error: (e as Error).message });
       }
     }
+    currentQueueId.current = null;
     setUploading(null);
     setProgress(0);
     setUploadStage("uploading");
@@ -996,13 +1067,16 @@ function Editor({
   return (
     <main className="gm">
       <header>
-        <button onClick={close}>← All galleries</button>
+        <div className="gm-brand">
+          <b className="gm-seal">RZ</b>
+          <button onClick={close}><GmIcon name="back" /> All galleries</button>
+        </div>
         <div>
           <span className={`autosave-state is-${saveState}`}>
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : ""}
           </span>
-          <button onClick={() => void openPreview()}>Preview</button>
-          <button onClick={() => void runHealthCheck()}>{checkingHealth ? "Checking…" : "Health check"}</button>
+          <button onClick={() => void openPreview()}><GmIcon name="eye" /> Preview</button>
+          <button onClick={() => void runHealthCheck()}><GmIcon name="check" /> {checkingHealth ? "Checking…" : "Health check"}</button>
           <button onClick={() => save(gallery, false)}>Save draft</button>
           <button className="primary" disabled={busy || publishingFilms} onClick={() => save(gallery, true)}>
             {publishingFilms ? "Processing films…" : busy ? "Publishing…" : "Publish gallery"}
@@ -1024,7 +1098,7 @@ function Editor({
         <aside className={`health-panel ${healthState.ok ? "is-ok" : "is-error"}`}>
           <strong>{healthState.ok ? "Ready to publish" : "Needs attention"}</strong>
           {healthState.issues.length > 0 && <ul>{healthState.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
-          <button onClick={() => setHealthState(null)}>×</button>
+          <button aria-label="Dismiss" onClick={() => setHealthState(null)}><GmIcon name="close" /></button>
         </aside>
       )}
       {previewMode && galleryRef.current.previewToken && (
@@ -1116,10 +1190,11 @@ function Editor({
               if (!uploading) void addFiles([...event.dataTransfer.files]);
             }}
           >
+            <GmIcon name="upload" />
             <strong>
-              {uploading ? "Upload in progress…" : "Drop photos & films here"}
+              {uploading ? "Uploading your files…" : "Drop photos & films here"}
             </strong>
-            <span>or click once to choose files</span>
+            <span>{uploading ? "You can add more once this batch finishes" : "or click to choose · JPG, PNG, MP4, MOV"}</span>
             <input
               hidden
               multiple
@@ -1136,31 +1211,64 @@ function Editor({
               }}
             />
           </label>
-          {uploading && (
-            <div
-              className={`upload-progress ${uploadStage === "processing" ? "is-processing" : ""}`}
-              role="status"
-              aria-live="polite"
-            >
-              {uploadStage === "processing" ? (
-                <>
-                  <b className="processing-spinner" aria-hidden="true" />
-                  <div>
-                    <strong>Creating the film cover…</strong>
-                    <small>
-                      {uploading} · {formatElapsed(elapsedSeconds)} elapsed
-                    </small>
-                    <small>Saving the first frame as the default cover</small>
+          {queue.length > 0 && (
+            <section className="upload-queue" role="status" aria-live="polite">
+              <header>
+                <div>
+                  <strong>
+                    {uploading
+                      ? `Uploading ${queue.filter((item) => item.status === "done" || item.status === "skipped" || item.status === "failed").length + 1} of ${queue.length}`
+                      : queue.some((item) => item.status === "failed")
+                        ? "Some files need another try"
+                        : "All files uploaded"}
+                  </strong>
+                  <small>
+                    {queue.filter((item) => item.status === "queued").length} waiting ·{" "}
+                    {queue.filter((item) => item.status === "done").length} done
+                    {queue.some((item) => item.status === "failed") &&
+                      ` · ${queue.filter((item) => item.status === "failed").length} failed`}
+                  </small>
+                </div>
+                {!uploading && (
+                  <div className="upload-queue-actions">
+                    {queue.some((item) => item.status === "failed") && (
+                      <button
+                        onClick={() => {
+                          const failed = queue.filter((item) => item.status === "failed" && queueFiles.current.has(item.id));
+                          void addFiles(failed.map((item) => queueFiles.current.get(item.id)!), failed.map((item) => item.id));
+                        }}
+                      >
+                        Retry failed
+                      </button>
+                    )}
+                    <button onClick={() => { setQueue([]); queueFiles.current.clear(); }}>Clear</button>
                   </div>
-                </>
-              ) : (
-                <>
-                  <strong>{uploading}</strong>
-                  <span>{progress}%</span>
-                  <i style={{ width: `${progress}%` }} />
-                </>
-              )}
-            </div>
+                )}
+              </header>
+              <i className="upload-queue-total" style={{ width: `${Math.round(queue.reduce((sum, item) => sum + (item.status === "queued" ? 0 : item.status === "uploading" ? item.progress : 100), 0) / queue.length)}%` }} />
+              <ol>
+                {queue.map((item) => (
+                  <li key={item.id} className={`is-${item.status}`}>
+                    <span className="upload-queue-kind" aria-hidden="true">{item.kind === "photo" ? "IMG" : "FILM"}</span>
+                    <div>
+                      <strong title={item.name}>{item.name}</strong>
+                      <small>
+                        {item.status === "queued" && `Waiting · ${formatSize(item.size)}`}
+                        {item.status === "uploading" && `Uploading · ${item.progress}% of ${formatSize(item.size)}`}
+                        {item.status === "processing" && `Creating film cover · ${formatElapsed(elapsedSeconds)}`}
+                        {item.status === "done" && "Uploaded"}
+                        {item.status === "skipped" && "Already in this gallery · skipped"}
+                        {item.status === "failed" && (item.error || "Upload failed")}
+                      </small>
+                      {item.status === "uploading" && <i style={{ width: `${item.progress}%` }} />}
+                    </div>
+                    <b className="upload-queue-state" aria-label={item.status}>
+                      {item.status === "done" ? "✓" : item.status === "failed" ? "!" : item.status === "skipped" ? "–" : item.status === "queued" ? "" : <span className="processing-spinner" />}
+                    </b>
+                  </li>
+                ))}
+              </ol>
+            </section>
           )}
           <div className="media-section-title">
             <div>
@@ -1340,7 +1448,7 @@ function Editor({
                   <small>Film cover</small>
                   <h2>Choose a photograph</h2>
                 </div>
-                <button onClick={() => setCoverFor(null)}>×</button>
+                <button aria-label="Close" onClick={() => setCoverFor(null)}><GmIcon name="close" /></button>
               </div>
               <div className="cover-options">
                 {gallery.media
@@ -1379,7 +1487,7 @@ function Editor({
                     Choose the {galleryCoverFor === "phoneCoverUrl" ? "phone" : "computer"} cover
                   </h2>
                 </div>
-                <button onClick={() => setGalleryCoverFor(null)}>×</button>
+                <button aria-label="Close" onClick={() => setGalleryCoverFor(null)}><GmIcon name="close" /></button>
               </div>
               <div className="cover-options">
                 {coverCandidates.map((candidate) => (
@@ -1455,6 +1563,12 @@ async function resize(file: File) {
       0.86,
     ),
   );
+}
+
+function formatSize(bytes: number) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 function formatElapsed(seconds: number) {
@@ -1549,5 +1663,26 @@ async function createFallbackVideoPoster() {
       "image/jpeg",
       0.86,
     ),
+  );
+}
+
+const gmIcons = {
+  plus: "M12 5v14M5 12h14",
+  trash: "M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5",
+  link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01",
+  more: "M6 12h.01M12 12h.01M18 12h.01",
+  upload: "M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 15v4h16v-4",
+  close: "M6 6l12 12M18 6 6 18",
+  back: "M19 12H5m6-6-6 6 6 6",
+  check: "M5 12.5l4.5 4.5L19 7",
+};
+
+function GmIcon({ name }: { name: keyof typeof gmIcons }) {
+  return (
+    <svg className="gm-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={name === "more" ? 3 : 1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d={gmIcons[name]} />
+    </svg>
   );
 }
