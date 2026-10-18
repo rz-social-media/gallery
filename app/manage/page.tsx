@@ -31,6 +31,7 @@ type Gallery = {
   deletedAt?: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
+  featuredVideoId?: string;
   media: Media[];
 };
 const blank = (): Gallery => ({
@@ -1265,6 +1266,17 @@ function Editor({
                   )}
                 </div>
                 <div className="film-actions">
+                  <button
+                    className={gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video")[0]?.id === v.id) ? "is-featured-film" : ""}
+                    onClick={() => {
+                      const updated = { ...galleryRef.current, featuredVideoId: v.id };
+                      galleryRef.current = updated;
+                      change(updated);
+                      void persist(updated);
+                    }}
+                  >
+                    {gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video")[0]?.id === v.id) ? "Background film ✓" : "Set as background"}
+                  </button>
                   <button onClick={() => setCoverFor(v.id)}>
                     Choose cover
                   </button>

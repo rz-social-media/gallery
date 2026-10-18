@@ -27,6 +27,7 @@ type Gallery = {
   note: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
+  featuredVideoId?: string;
   media: Media[];
 };
 
@@ -136,6 +137,8 @@ export default function CoupleGallery() {
     ? allPhotos.filter((photo) => sharedPhotoIds.includes(photo.id))
     : allPhotos;
   const films = gallery.media.filter((m) => m.type === "video" && m.playbackId);
+  const featuredFilm =
+    films.find((film) => film.id === gallery.featuredVideoId) || films[0];
   const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
   const automaticCover =
     photos[0]?.url ||
@@ -482,28 +485,44 @@ export default function CoupleGallery() {
     );
   if (view === "films")
     return (
-      <main
-        className="dynamic-films"
-        style={coverStyle}
-      >
-        <div className="dynamic-film-cover" />
-        <DynamicHeader
-          names={names}
-          back={backHome}
-          action={
+      <main className="dynamic-films cinematic-films">
+        {featuredFilm?.playbackId && (
+          <MuxPlayer
+            className="cinematic-film-background"
+            playbackId={featuredFilm.playbackId}
+            muted
+            autoPlay
+            loop
+            playsInline
+            preload="auto"
+            title={`${names} background film`}
+          />
+        )}
+        <div className="cinematic-film-shade" />
+        <header className="cinematic-film-header">
+          <button className="cinematic-brand" onClick={backHome}>
+            <span className="brand-seal">RZ</span>
+            <span><strong>RZ.SOCIAL.MEDIA</strong><small>BACK TO GALLERY⌄</small></span>
+          </button>
+          <div>
             <a
-              className="page-download-all header-download-all"
+              className="cinematic-circle-action"
               href={downloadUrl("videos")}
               onClick={(event) => { showDownloadFeedback(); adaptDownload(event, "videos"); }}
+              aria-label="Download all films"
             >
-              <Icon name="download" /> {downloadLabel("Download all films")}
+              <Icon name="download" />
             </a>
-          }
-        />
+            <button className="cinematic-circle-action" onClick={() => void shareGallery()} aria-label="Share gallery">
+              <Icon name="share" />
+            </button>
+          </div>
+        </header>
         <section className="dynamic-film-copy">
-          <small>A wedding story</small>
           <h1>{names}</h1>
-          <p>{gallery.location}</p>
+          <button className="cinematic-play-all" onClick={() => setActiveFilm(0)}>
+            <span>▶</span> PLAY ALL
+          </button>
         </section>
         <section className="dynamic-film-rail">
           {films.map((film, index) => (
@@ -544,8 +563,8 @@ export default function CoupleGallery() {
                   preload="metadata"
                   title={`${film.title || "Wedding film"} preview`}
                 />
-                <span>▶</span>
-                <strong>{film.title || "Wedding film"}</strong>
+                <span className="film-card-play">▶</span>
+                <strong>{film.title || "Wedding film"}<small>▶ PLAY FILM</small></strong>
               </button>
               <a
                 className="media-card-download"
@@ -572,6 +591,11 @@ export default function CoupleGallery() {
                 playbackId={films[activeFilm].playbackId!}
                 title={films[activeFilm].title}
                 accentColor="#c4a274"
+                onEnded={() =>
+                  setActiveFilm((current) =>
+                    current === null || current >= films.length - 1 ? null : current + 1,
+                  )
+                }
               />
               <a
                 className="video-download"
