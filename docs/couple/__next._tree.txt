@@ -1,5 +1,6 @@
-:HL["/gallery/_next/static/chunks/02xzhjujsl5bg.css","style"]
+:HL["/gallery/_next/static/chunks/0zpq0d3d5v~40.css","style"]
 :HL["/gallery/fonts/meno-display-light.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/meno-display.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"couple","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"vbR5C-Z7Ke5Q2IsTAVwUt"}
+:HL["https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:wght@400&display=swap","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"couple","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"A-9PQd01ogb5g5ME96a0n"}
