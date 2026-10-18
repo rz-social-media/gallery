@@ -25,6 +25,7 @@ type Gallery = {
   weddingDate: string;
   note: string;
   published: boolean;
+  publishPending?: boolean;
   updatedAt?: string;
   previewToken?: string;
   deletedAt?: string;
@@ -193,7 +194,7 @@ export default function Manager() {
     setBusy(true);
     setNotice("");
     try {
-      let nextGallery = { ...g, slug, published };
+      let nextGallery = { ...g, slug, published, publishPending: false };
       if (published) {
         const media = [...nextGallery.media];
         for (let index = 0; index < media.length; index++) {
@@ -218,14 +219,14 @@ export default function Manager() {
         }
         nextGallery = { ...nextGallery, media };
         if (media.some((item) => item.type === "video" && !item.playbackId)) {
-          const draft = { ...nextGallery, published: false };
+          const draft = { ...nextGallery, published: false, publishPending: true };
           const saved = await call(`/api/galleries/${slug}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(draft),
           });
           setActive(saved);
-          setNotice("Films are processing. Health check will run automatically when they are ready.");
+          setNotice("Films are processing. Publishing will finish automatically.");
           setBusy(false);
           return;
         }
@@ -535,6 +536,7 @@ function Editor({
     [checkingHealth, setCheckingHealth] = useState(false);
   const galleryRef = useRef(gallery);
   const lastAutosaved = useRef(JSON.stringify(gallery));
+  const automaticPublishStarted = useRef(false);
   useEffect(() => {
     galleryRef.current = gallery;
   }, [gallery]);
@@ -553,6 +555,23 @@ function Editor({
     .filter((item) => item.type === "video" && item.assetId && !item.playbackId)
     .map((item) => item.assetId)
     .join(",");
+  const films = gallery.media.filter((item) => item.type === "video");
+  const readyFilms = films.filter((item) => Boolean(item.playbackId)).length;
+  const pendingFilms = films.filter((item) => item.assetId && !item.playbackId).length;
+  const publishingFilms = Boolean(gallery.publishPending && pendingFilms > 0);
+  const [publishStartedAt, setPublishStartedAt] = useState<number | null>(
+    publishingFilms ? Date.now() : null,
+  );
+  const [publishElapsed, setPublishElapsed] = useState(0);
+  useEffect(() => {
+    if (!publishingFilms) return;
+    if (!publishStartedAt) setPublishStartedAt(Date.now());
+    const update = () =>
+      setPublishElapsed(Math.floor((Date.now() - (publishStartedAt || Date.now())) / 1000));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [publishingFilms, publishStartedAt]);
   useEffect(() => {
     if (!gallery.slug || !pendingVideoIds) return;
     let stopped = false;
@@ -614,6 +633,18 @@ function Editor({
       if (timer) window.clearTimeout(timer);
     };
   }, [pendingVideoIds, gallery.slug, code]);
+  useEffect(() => {
+    if (
+      gallery.publishPending &&
+      films.length > 0 &&
+      pendingFilms === 0 &&
+      films.every((item) => item.playbackId) &&
+      !automaticPublishStarted.current
+    ) {
+      automaticPublishStarted.current = true;
+      void save({ ...galleryRef.current, publishPending: false }, true);
+    }
+  }, [gallery.publishPending, pendingFilms, readyFilms]);
   const set = (k: keyof Gallery, v: any) => change({ ...gallery, [k]: v });
   async function persist(value: Gallery) {
     const response = await fetch(`${API}/api/galleries/${value.slug}`, {
@@ -972,11 +1003,22 @@ function Editor({
           <button onClick={() => void openPreview()}>Preview</button>
           <button onClick={() => void runHealthCheck()}>{checkingHealth ? "Checking…" : "Health check"}</button>
           <button onClick={() => save(gallery, false)}>Save draft</button>
-          <button className="primary" onClick={() => save(gallery, true)}>
-            {busy ? "Publishing…" : "Publish gallery"}
+          <button className="primary" disabled={busy || publishingFilms} onClick={() => save(gallery, true)}>
+            {publishingFilms ? "Processing films…" : busy ? "Publishing…" : "Publish gallery"}
           </button>
         </div>
       </header>
+      {publishingFilms && (
+        <aside className="publish-progress" role="status" aria-live="polite">
+          <b className="processing-spinner" aria-hidden="true" />
+          <div>
+            <strong>Preparing your films for streaming</strong>
+            <p>{readyFilms} of {films.length} ready · {formatElapsed(publishElapsed)} elapsed</p>
+            <small>You can leave this page. Processing continues safely in the background.</small>
+          </div>
+          <div className="publish-progress-dots" aria-hidden="true"><i /><i /><i /></div>
+        </aside>
+      )}
       {healthState && (
         <aside className={`health-panel ${healthState.ok ? "is-ok" : "is-error"}`}>
           <strong>{healthState.ok ? "Ready to publish" : "Needs attention"}</strong>

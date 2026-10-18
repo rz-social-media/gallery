@@ -1,5 +1,5 @@
-:HL["/gallery/_next/static/chunks/15cmw6iucjb5n.css","style"]
+:HL["/gallery/_next/static/chunks/0b7p0kxlrw.tc.css","style"]
 :HL["/gallery/fonts/meno-display-light.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/meno-display.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"weddings","param":null,"prefetchHints":0,"slots":{"children":{"name":"ofir-michael","param":null,"prefetchHints":0,"slots":{"children":{"name":"photography","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}}}},"staleTime":300,"buildId":"tnEezUIlTXgs1SyjbFEN-"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"weddings","param":null,"prefetchHints":0,"slots":{"children":{"name":"ofir-michael","param":null,"prefetchHints":0,"slots":{"children":{"name":"photography","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}}}},"staleTime":300,"buildId":"b2GhklEtaEhf89EM4xucX"}

@@ -890,6 +890,39 @@ button:disabled,
 .health-panel.is-error { border-color: #b56b6b; }
 .health-panel ul { margin: .65rem 0 0; padding-left: 1.2rem; }
 .health-panel > button { position: absolute; top: .5rem; right: .6rem; border: 0; background: transparent; }
+.publish-progress {
+  width: min(920px, calc(100% - 2rem));
+  margin: 1rem auto 0;
+  padding: 1.15rem 1.3rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #cdbfb2;
+  background: #fffdf8;
+  box-shadow: 0 14px 40px rgba(45, 34, 28, .06);
+}
+.publish-progress strong { display: block; font-family: Georgia, serif; font-size: 1.15rem; font-weight: 400; }
+.publish-progress p { margin: .3rem 0 .15rem; color: #6f3540; font-size: .75rem; }
+.publish-progress small { color: #807368; font-size: .66rem; letter-spacing: 0; text-transform: none; }
+.publish-progress-dots { display: flex; gap: .35rem; }
+.publish-progress-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6f3540;
+  animation: publish-pulse 1.2s ease-in-out infinite;
+}
+.publish-progress-dots i:nth-child(2) { animation-delay: .16s; }
+.publish-progress-dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes publish-pulse {
+  0%, 70%, 100% { opacity: .2; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-4px); }
+}
+@media (max-width: 700px) {
+  .publish-progress { grid-template-columns: auto 1fr; }
+  .publish-progress-dots { display: none; }
+}
 .preview-modal {
   position: fixed;
   inset: 0;
