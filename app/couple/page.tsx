@@ -1,7 +1,7 @@
 "use client";
 
 import MuxPlayer from "@mux/mux-player-react";
-import type MuxPlayerElement from "@mux/mux-player";
+import FilmPlayer from "../components/FilmPlayer";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -47,7 +47,6 @@ export default function CoupleGallery() {
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const wheelLocked = useRef(false);
   const filmRail = useRef<HTMLElement | null>(null);
-  const activePlayer = useRef<MuxPlayerElement | null>(null);
   const fullscreenRequested = useRef(false);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const touchPoints = useRef(new Map<number, { x: number; y: number }>());
@@ -269,6 +268,7 @@ export default function CoupleGallery() {
         : (current + direction + photos.length) % photos.length,
     );
   };
+  const closeFilm = () => setActiveFilm(null);
   const openFilm = (index: number) => {
     fullscreenRequested.current =
       window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760;
@@ -277,7 +277,7 @@ export default function CoupleGallery() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "play" }),
-    });
+    }).catch(() => undefined);
   };
   if (view === "photos")
     return (
@@ -551,16 +551,6 @@ export default function CoupleGallery() {
               <article
                 key={film.id}
                 className="rzf-card"
-                onMouseEnter={(event) => {
-                  if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-                  const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { play?: () => Promise<void> }) | null;
-                  void player?.play?.().catch(() => undefined);
-                }}
-                onMouseLeave={(event) => {
-                  const player = event.currentTarget.querySelector("mux-player") as (HTMLElement & { pause?: () => void; currentTime?: number }) | null;
-                  player?.pause?.();
-                  if (player) player.currentTime = 0;
-                }}
               >
                 <button onClick={() => openFilm(index)} aria-label={`Play ${film.title || "wedding film"}`}>
                   <img
@@ -569,15 +559,6 @@ export default function CoupleGallery() {
                       `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
                     }
                     alt=""
-                  />
-                  <MuxPlayer
-                    className="rzf-preview"
-                    playbackId={`${film.playbackId}?max_resolution=720p`}
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    title={`${film.title || "Wedding film"} preview`}
                   />
                   <span className="rzf-card-shade" />
                   <span className="rzf-card-play"><FilmIcon name="play" /></span>
@@ -600,45 +581,19 @@ export default function CoupleGallery() {
           )}
         </div>
         {activeFilm !== null && (
-          <div className="player-modal" onClick={() => setActiveFilm(null)}>
-            <button
-              className="close-player"
-              onClick={() => setActiveFilm(null)}
-            >
-              ×
-            </button>
-            <div className="player-frame" onClick={(e) => e.stopPropagation()}>
-              <MuxPlayer
-                ref={activePlayer}
-                autoPlay
-                playbackId={films[activeFilm].playbackId!}
-                title={films[activeFilm].title}
-                accentColor="#c4a274"
-                preferPlayback="mse"
-                maxResolution="2160p"
-                maxAutoResolution="2160p"
-                renditionOrder="desc"
-                capRenditionToPlayerSize={false}
-                initialBandwidthEstimateKbps={50000}
-                onPlaying={() => {
-                  if (!fullscreenRequested.current) return;
-                  fullscreenRequested.current = false;
-                  void activePlayer.current?.requestFullscreen().catch(() => undefined);
-                }}
-                onEnded={() =>
-                  setActiveFilm((current) =>
-                    current === null || current >= films.length - 1 ? null : current + 1,
-                  )
-                }
-              />
-              <a
-                className="video-download"
-                href={`${API}/api/download?key=${encodeURIComponent(films[activeFilm].originalKey)}&name=${encodeURIComponent(films[activeFilm].filename)}`}
-              >
-                Download original film
-              </a>
-            </div>
-          </div>
+          <FilmPlayer
+            key={films[activeFilm].id}
+            playbackId={films[activeFilm].playbackId!}
+            title={films[activeFilm].title || "Wedding film"}
+            downloadUrl={`${API}/api/download?key=${encodeURIComponent(films[activeFilm].originalKey)}&name=${encodeURIComponent(films[activeFilm].filename)}`}
+            requestFullscreen={fullscreenRequested.current}
+            onClose={closeFilm}
+            onEnded={() =>
+              setActiveFilm((current) =>
+                current === null || current >= films.length - 1 ? null : current + 1,
+              )
+            }
+          />
         )}
         <MobileActionBar back={backHome} share={shareGallery} download={mobileDownloadUrl("videos")} />
       </main>
@@ -711,42 +666,24 @@ function JustifiedPhotoGrid({
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  const gap = width <= 700 ? 7 : 12;
-  const targetHeight = width <= 700 ? 190 : 290;
-  const rows: Array<{
-    height: number;
-    items: Array<{ photo: Media; index: number; ratio: number }>;
-  }> = [];
-  let current: Array<{ photo: Media; index: number; ratio: number }> = [];
-  let ratioSum = 0;
-  let previousHeight = targetHeight;
+  const columnCount = width <= 700 ? 2 : 3;
+  const columns: Array<{ height: number; items: Array<{ photo: Media; index: number; ratio: number }> }> =
+    Array.from({ length: columnCount }, () => ({ height: 0, items: [] }));
   photos.forEach((photo, index) => {
     const ratio = ratios[photo.id] || 1.45;
-    current.push({ photo, index, ratio });
-    ratioSum += ratio;
-    const height = (width - gap * (current.length - 1)) / ratioSum;
-    const rhythm = width <= 700 ? 1 : [0.86, 1.12, 0.96][rows.length % 3];
-    if (height <= targetHeight * rhythm) {
-      previousHeight = Math.max(135, height);
-      rows.push({ height: previousHeight, items: current });
-      current = [];
-      ratioSum = 0;
-    }
+    const shortest = columns.reduce((min, column) => (column.height < min.height ? column : min), columns[0]);
+    shortest.items.push({ photo, index, ratio });
+    shortest.height += 1 / ratio;
   });
-  if (current.length)
-    rows.push({
-      height: Math.min(previousHeight, targetHeight),
-      items: current,
-    });
   return (
     <section className="dynamic-photo-grid" ref={container}>
-      {rows.map((row, rowIndex) => (
-        <div className="justified-row" key={rowIndex} style={{ height: row.height }}>
-          {row.items.map(({ photo, index, ratio }) => (
+      {columns.map((column, columnIndex) => (
+        <div className="masonry-column" key={columnIndex}>
+          {column.items.map(({ photo, index, ratio }) => (
             <article
               className={`public-photo-tile ${selectedPhotos.includes(photo.id) ? "is-selected" : ""}`}
               key={photo.id}
-              style={{ width: row.height * ratio }}
+              style={{ aspectRatio: String(ratio) }}
             >
               <button onClick={() => selectionMode ? togglePhoto(photo.id) : openPhoto(index)}>
                 <img
