@@ -4217,3 +4217,5 @@ a:focus-visible {
 @keyframes rz-toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
 .gm .cover-options button, .gm .cover-library button { position: relative; height: 0; padding: 0 0 100%; aspect-ratio: auto; }
 .cover-options button img, .cover-library button img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gm .gm-title-actions { align-items: center; align-self: flex-end; margin-bottom: .6rem; }
+.gm .gm-title-actions button { height: 48px; margin: 0; padding: 0 1.35rem; font-size: .84rem; }

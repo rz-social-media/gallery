@@ -1,6 +1,6 @@
-:HL["/gallery/_next/static/chunks/0bg_hg2rc0.0e.css","style"]
+:HL["/gallery/_next/static/chunks/0w71oix2y78pm.css","style"]
 :HL["/gallery/fonts/meno-display-light.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/meno-display.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["/gallery/fonts/vogue-demi.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
 :HL["https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:wght@400&display=swap","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"weddings","param":null,"prefetchHints":0,"slots":{"children":{"name":"priscillia-cory","param":null,"prefetchHints":0,"slots":{"children":{"name":"photography","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}}}},"staleTime":300,"buildId":"PHLhO2e0GcqocjYnFi7rh"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"weddings","param":null,"prefetchHints":0,"slots":{"children":{"name":"priscillia-cory","param":null,"prefetchHints":0,"slots":{"children":{"name":"photography","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}}}},"staleTime":300,"buildId":"NqMDAZs6eUTLpn7RhALTx"}
