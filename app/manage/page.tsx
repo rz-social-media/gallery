@@ -1421,15 +1421,34 @@ async function createVideoPoster(file: File) {
     const video = document.createElement("video");
     video.muted = true;
     video.playsInline = true;
-    video.preload = "metadata";
+    video.preload = "auto";
     video.src = url;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => {
-        video.currentTime = Math.min(0.1, Math.max(0, video.duration || 0));
+    const frameReady = await new Promise<boolean>((resolve) => {
+      let finished = false;
+      const finish = (ready: boolean) => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timeout);
+        resolve(ready && video.videoWidth > 0 && video.videoHeight > 0);
       };
-      video.onseeked = () => resolve();
-      video.onerror = () => reject(new Error("Could not create film cover"));
+      const timeout = window.setTimeout(() => finish(video.readyState >= 2), 12000);
+      video.onerror = () => finish(false);
+      video.onseeked = () => finish(true);
+      video.onloadeddata = () => {
+        if (!Number.isFinite(video.duration) || video.duration <= 0.04) {
+          finish(true);
+          return;
+        }
+        try {
+          video.currentTime = Math.min(0.1, Math.max(0.01, video.duration / 100));
+          window.setTimeout(() => finish(video.readyState >= 2), 1500);
+        } catch {
+          finish(true);
+        }
+      };
+      video.load();
     });
+    if (!frameReady) return createFallbackVideoPoster();
     const max = 1600,
       scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight)),
       canvas = document.createElement("canvas");
@@ -1449,4 +1468,32 @@ async function createVideoPoster(file: File) {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+async function createFallbackVideoPoster() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 900;
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = "#eee7de";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#8f7b69";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(800, 420, 76, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = "#2a241f";
+  context.textAlign = "center";
+  context.font = "600 58px Georgia, serif";
+  context.fillText("RZ", 800, 440);
+  context.fillStyle = "#74685d";
+  context.font = "28px Arial, sans-serif";
+  context.fillText("WEDDING FILM", 800, 555);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("Could not create cover")),
+      "image/jpeg",
+      0.86,
+    ),
+  );
 }
