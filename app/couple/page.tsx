@@ -758,10 +758,10 @@ export default function CoupleGallery() {
         <p className="gallery-meta">{[gallery.weddingDate, gallery.location].filter(Boolean).join(" · ")}</p>
         <div>
           <button disabled={!photos.length} onClick={() => openView("photos")}>
-            <Icon name="photo" /> <span>Photography<small>{photos.length} photos</small></span> <b>↗</b>
+            <Icon name="photo" /> <span>Photography<small>{photos.length} photos</small></span>
           </button>
           <button disabled={!films.length} onClick={() => openView("films")}>
-            <Icon name="film" /> <span>Films<small>{films.length} films</small></span> <b>↗</b>
+            <Icon name="film" /> <span>Films<small>{films.length} films</small></span>
           </button>
         </div>
       </section>
