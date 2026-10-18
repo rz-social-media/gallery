@@ -48,9 +48,24 @@ export default function CoupleGallery() {
   const wheelLocked = useRef(false);
   const filmRail = useRef<HTMLElement | null>(null);
   const fullscreenRequested = useRef(false);
-  const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const touchPoints = useRef(new Map<number, { x: number; y: number }>());
-  const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [gesturing, setGesturing] = useState(false);
+  const photoImage = useRef<HTMLImageElement | null>(null);
+  const gesture = useRef<{
+    mode: "none" | "swipe" | "pan" | "pinch";
+    startX: number;
+    startY: number;
+    startTime: number;
+    startPan: { x: number; y: number };
+    startZoom: number;
+    startDistance: number;
+    startMid: { x: number; y: number };
+    moved: boolean;
+    multi: boolean;
+  }>({ mode: "none", startX: 0, startY: 0, startTime: 0, startPan: { x: 0, y: 0 }, startZoom: 1, startDistance: 1, startMid: { x: 0, y: 0 }, moved: false, multi: false });
+  const lastTap = useRef<{ time: number; x: number; y: number } | null>(null);
+  const tapTimer = useRef<number | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -264,8 +279,32 @@ export default function CoupleGallery() {
         window.location.href = `${API}/api/download?key=${encodeURIComponent(photo.originalKey)}&name=${encodeURIComponent(photo.filename)}`;
     }
   };
-  const openPhoto = (index: number) => {
+  const resetZoom = () => {
     setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+  // Keeps the zoomed photo covering the screen instead of drifting off-edge.
+  const clampPan = (next: { x: number; y: number }, scale: number) => {
+    const image = photoImage.current;
+    if (!image || scale <= 1) return { x: 0, y: 0 };
+    const maxX = Math.max(0, (image.offsetWidth * scale - window.innerWidth) / 2);
+    const maxY = Math.max(0, (image.offsetHeight * scale - window.innerHeight) / 2);
+    return {
+      x: Math.min(maxX, Math.max(-maxX, next.x)),
+      y: Math.min(maxY, Math.max(-maxY, next.y)),
+    };
+  };
+  // Zoom so the point under (clientX, clientY) stays under the finger.
+  const zoomAt = (scale: number, clientX: number, clientY: number, from = { zoom, pan }) => {
+    const next = Math.min(5, Math.max(1, scale));
+    const cx = clientX - window.innerWidth / 2;
+    const cy = clientY - window.innerHeight / 2;
+    const ratio = next / from.zoom;
+    setZoom(next);
+    setPan(clampPan({ x: cx - (cx - from.pan.x) * ratio, y: cy - (cy - from.pan.y) * ratio }, next));
+  };
+  const openPhoto = (index: number) => {
+    resetZoom();
     setActivePhoto(index);
     if (!sessionStorage.getItem("rz-swipe-hint")) setShowSwipeHint(true);
   };
@@ -279,6 +318,7 @@ export default function CoupleGallery() {
   };
   const changePhoto = (direction: -1 | 1) => {
     setSwipeOffset(0);
+    resetZoom();
     setActivePhoto((current) =>
       current === null
         ? null
@@ -363,7 +403,10 @@ export default function CoupleGallery() {
             role="dialog"
             aria-modal="true"
             aria-label={`${names} photo viewer`}
-            onClick={() => setActivePhoto(null)}
+            onClick={(event) => {
+              if ((event.nativeEvent as PointerEvent).pointerType === "touch" || window.matchMedia("(pointer: coarse)").matches) return;
+              setActivePhoto(null);
+            }}
             onWheel={(event) => {
               event.stopPropagation();
               if (
@@ -381,50 +424,114 @@ export default function CoupleGallery() {
             }}
             onPointerDown={(event) => {
               if (event.pointerType === "mouse") return;
+              if ((event.target as HTMLElement).closest("button, a")) return;
               touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+              try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+              } catch {
+                // Capture is a nicety; gestures still work without it.
+              }
+              const g = gesture.current;
               if (touchPoints.current.size === 2) {
                 const [first, second] = [...touchPoints.current.values()];
-                pinchStart.current = {
-                  distance: Math.hypot(second.x - first.x, second.y - first.y),
-                  zoom,
-                };
+                g.mode = "pinch";
+                g.multi = true;
+                g.startDistance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+                g.startMid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+                g.startZoom = zoom;
+                g.startPan = pan;
+                setSwipeOffset(0);
+                setGesturing(true);
+                setShowSwipeHint(false);
+                sessionStorage.setItem("rz-swipe-hint", "seen");
+              } else if (touchPoints.current.size === 1) {
+                g.mode = zoom > 1 ? "pan" : "swipe";
+                g.startX = event.clientX;
+                g.startY = event.clientY;
+                g.startTime = Date.now();
+                g.startPan = pan;
+                g.moved = false;
+                g.multi = false;
               }
-              swipeStart.current = { x: event.clientX, y: event.clientY };
-              event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
-              if (touchPoints.current.has(event.pointerId))
-                touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-              if (touchPoints.current.size === 2 && pinchStart.current) {
+              if (!touchPoints.current.has(event.pointerId)) return;
+              touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+              const g = gesture.current;
+              if (g.mode === "pinch" && touchPoints.current.size >= 2) {
                 const [first, second] = [...touchPoints.current.values()];
                 const distance = Math.hypot(second.x - first.x, second.y - first.y);
-                setZoom(Math.min(4, Math.max(1, pinchStart.current.zoom * distance / pinchStart.current.distance)));
+                const mid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+                const next = Math.min(5, Math.max(1, (g.startZoom * distance) / g.startDistance));
+                const cx = g.startMid.x - window.innerWidth / 2;
+                const cy = g.startMid.y - window.innerHeight / 2;
+                const ratio = next / g.startZoom;
+                setZoom(next);
+                setPan(clampPan({
+                  x: cx - (cx - g.startPan.x) * ratio + (mid.x - g.startMid.x),
+                  y: cy - (cy - g.startPan.y) * ratio + (mid.y - g.startMid.y),
+                }, next));
+                return;
+              }
+              const dx = event.clientX - g.startX;
+              const dy = event.clientY - g.startY;
+              if (Math.hypot(dx, dy) > 8) g.moved = true;
+              if (g.mode === "pan") {
+                setGesturing(true);
+                setPan(clampPan({ x: g.startPan.x + dx, y: g.startPan.y + dy }, zoom));
+              } else if (g.mode === "swipe" && Math.abs(dx) > Math.abs(dy)) {
+                setSwipeOffset(dx);
+              }
+            }}
+            onPointerUp={(event) => {
+              if (!touchPoints.current.has(event.pointerId)) return;
+              touchPoints.current.delete(event.pointerId);
+              const g = gesture.current;
+              if (touchPoints.current.size > 0) {
+                // One finger lifted mid-pinch: continue as a pan with the remaining finger.
+                const [rest] = [...touchPoints.current.values()];
+                g.mode = zoom > 1 ? "pan" : "none";
+                g.startX = rest.x;
+                g.startY = rest.y;
+                g.startPan = pan;
+                return;
+              }
+              setGesturing(false);
+              const dx = event.clientX - g.startX;
+              const dy = event.clientY - g.startY;
+              const mode = g.mode;
+              g.mode = "none";
+              if (zoom < 1.05) resetZoom();
+              if (mode === "swipe") {
+                if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) {
+                  changePhoto(dx < 0 ? 1 : -1);
+                  return;
+                }
+                setSwipeOffset(0);
+              }
+              if (g.multi || g.moved || Date.now() - g.startTime > 300) return;
+              // Tap handling: double tap zooms at the finger, single tap on the backdrop closes.
+              const now = Date.now();
+              const previous = lastTap.current;
+              if (previous && now - previous.time < 300 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 40) {
+                if (tapTimer.current) window.clearTimeout(tapTimer.current);
+                lastTap.current = null;
+                if (zoom > 1) resetZoom();
+                else zoomAt(2.5, event.clientX, event.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
                 setShowSwipeHint(false);
                 sessionStorage.setItem("rz-swipe-hint", "seen");
                 return;
               }
-              if (zoom > 1) return;
-              if (!swipeStart.current || event.pointerType === "mouse") return;
-              const dx = event.clientX - swipeStart.current.x;
-              const dy = event.clientY - swipeStart.current.y;
-              if (Math.abs(dx) > Math.abs(dy)) setSwipeOffset(dx);
-            }}
-            onPointerUp={(event) => {
-              touchPoints.current.delete(event.pointerId);
-              if (touchPoints.current.size < 2) pinchStart.current = null;
-              if (zoom > 1) return;
-              if (!swipeStart.current || event.pointerType === "mouse") return;
-              const dx = event.clientX - swipeStart.current.x;
-              const dy = event.clientY - swipeStart.current.y;
-              swipeStart.current = null;
-              if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy))
-                changePhoto(dx < 0 ? 1 : -1);
-              else setSwipeOffset(0);
+              lastTap.current = { time: now, x: event.clientX, y: event.clientY };
+              const onImage = event.target === photoImage.current;
+              if (!onImage && zoom === 1) {
+                tapTimer.current = window.setTimeout(() => setActivePhoto(null), 300);
+              }
             }}
             onPointerCancel={() => {
               touchPoints.current.clear();
-              pinchStart.current = null;
-              swipeStart.current = null;
+              gesture.current.mode = "none";
+              setGesturing(false);
               setSwipeOffset(0);
             }}
           >
@@ -446,10 +553,13 @@ export default function CoupleGallery() {
               <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
             <img
+              ref={photoImage}
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                setZoom((current) => (current > 1 ? 1 : 2.5));
+                if (window.matchMedia("(pointer: coarse)").matches) return;
+                if (zoom > 1) resetZoom();
+                else zoomAt(2.5, e.clientX, e.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
                 setShowSwipeHint(false);
                 sessionStorage.setItem("rz-swipe-hint", "seen");
               }}
@@ -457,9 +567,10 @@ export default function CoupleGallery() {
               alt={photos[activePhoto].alt}
               draggable={false}
               style={{
-                transform: `translateX(${swipeOffset}px) scale(${zoom * (swipeOffset ? 0.985 : 1)})`,
+                transform: `translate3d(${pan.x + swipeOffset}px, ${pan.y}px, 0) scale(${zoom * (swipeOffset ? 0.985 : 1)})`,
                 opacity: swipeOffset ? Math.max(0.55, 1 - Math.abs(swipeOffset) / 500) : 1,
-                transition: swipeOffset ? "none" : undefined,
+                transition: swipeOffset || gesturing ? "none" : undefined,
+                cursor: zoom > 1 ? "grab" : "zoom-in",
               }}
             />
             {showSwipeHint && (
@@ -471,12 +582,12 @@ export default function CoupleGallery() {
                   sessionStorage.setItem("rz-swipe-hint", "seen");
                 }}
               >
-                Swipe to explore · Double tap to zoom
+                Swipe to explore · Pinch to zoom
               </button>
             )}
             <div className="zoom-controls">
-              <button onClick={(event) => { event.stopPropagation(); setZoom((current) => Math.max(1, current - 0.5)); }} aria-label="Zoom out">−</button>
-              <button onClick={(event) => { event.stopPropagation(); setZoom((current) => Math.min(4, current + 0.5)); }} aria-label="Zoom in">＋</button>
+              <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom - 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom out">−</button>
+              <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom + 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom in">＋</button>
             </div>
             {[1, -1].map((offset) => {
               const preloadIndex =
