@@ -577,7 +577,7 @@ export default {
           body: JSON.stringify({
             inputs: [{ url: inputUrl }],
             playback_policies: ["public"],
-            video_quality: "plus",
+            video_quality: "premium",
             max_resolution_tier: "2160p",
             static_renditions: [{ resolution: "highest" }],
             passthrough: JSON.stringify({
