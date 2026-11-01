@@ -4355,3 +4355,11 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
   .dynamic-home.is-omni header .omni-mark { height: 22px; }
   .dynamic-photos.is-omni .dynamic-topbar .omni-mark { height: 20px; }
 }
+/* OMNI home on computers: lighter, mostly neutral shade so the cover photo leads */
+@media (min-width: 701px) {
+  .dynamic-home.is-omni .dynamic-shade {
+    background:
+      linear-gradient(90deg, rgba(0, 2, 45, .58), rgba(0, 2, 45, .08) 62%, transparent),
+      linear-gradient(0deg, rgba(4, 4, 24, .5), transparent 55%);
+  }
+}
