@@ -29,8 +29,13 @@ const safeSlug = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "")
     .slice(0, 80);
+// Keep the original name (Hebrew, spaces and all); drop only characters that
+// are unsafe in file names or headers.
 const safeName = (value: string) =>
-  value.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-140);
+  value.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, "-").trim().slice(-140) || "download";
+// RFC 6266: ASCII fallback plus the UTF-8 name for browsers that support it.
+const attachment = (name: string) =>
+  `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 const escapeHtml = (value: unknown) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -318,6 +323,18 @@ async function galleryArchive(
   // storage lookup per file; only items missing them are checked, in parallel.
   const modified = new Date(gallery.updatedAt || Date.now());
   const resolved: (ZipEntry | null)[] = new Array(media.length).fill(null);
+  // Original file names; repeats get " (2)", " (3)"… before the extension.
+  const used = new Set<string>();
+  const entryNames = media.map((item: Record<string, any>, index: number) => {
+    const folder = item.raw ? "Raw materials" : item.type === "photo" ? "Photos" : "Films";
+    const base = safeName(item.filename || `${item.type}-${index + 1}`);
+    const dot = base.lastIndexOf(".");
+    const [stem, ext] = dot > 0 ? [base.slice(0, dot), base.slice(dot)] : [base, ""];
+    let name = `${folder}/${base}`;
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = `${folder}/${stem} (${n})${ext}`;
+    used.add(name.toLowerCase());
+    return name;
+  });
   const pending = media.map((item: Record<string, any>, index: number) => ({ item, index }));
   const worker = async () => {
     for (let next = pending.shift(); next; next = pending.shift()) {
@@ -325,9 +342,8 @@ async function galleryArchive(
       const known = typeof item.crc32 === "number" && typeof item.size === "number";
       const head = known ? null : await env.MEDIA.head(item.originalKey);
       if (!known && !head) continue;
-      const folder = item.raw ? "Raw materials" : item.type === "photo" ? "Photos" : "Films";
       resolved[index] = {
-        name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
+        name: entryNames[index],
         size: known ? item.size : head!.size,
         crc32: known || (typeof item.crc32 === "number" && item.size === head!.size) ? item.crc32 : undefined,
         modified: head?.uploaded || modified,
@@ -869,13 +885,13 @@ export default {
         const headers = new Headers({
           "Access-Control-Allow-Origin": origin,
           "Cache-Control": "private,no-store",
-          "Content-Disposition": `attachment; filename="${safeName(url.searchParams.get("name") || key.split("/").pop() || "download")}"`,
+          "Content-Disposition": attachment(safeName(url.searchParams.get("name") || key.split("/").pop() || "download")),
           "Content-Length": String(object.size),
         });
         object.writeHttpMetadata(headers);
         headers.set(
           "Content-Disposition",
-          `attachment; filename="${safeName(url.searchParams.get("name") || key.split("/").pop() || "download")}"`,
+          attachment(safeName(url.searchParams.get("name") || key.split("/").pop() || "download")),
         );
         return new Response(object.body, { headers });
       }
