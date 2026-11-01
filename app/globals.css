@@ -4226,3 +4226,132 @@ a:focus-visible {
 .dynamic-home section > div > button:disabled { transform: none; background: #f7f3ed; }
 .dynamic-home section > div > button:disabled:hover { transform: none; background: #f7f3ed; }
 @media (max-width: 700px) { .dynamic-home section > div { align-items: stretch; } .dynamic-home section > div > button { width: min(100%, 270px); } }
+
+/* ===== Raw materials: video tiles in the photo grid ===== */
+.grid-video-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(10, 10, 20, .55);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.grid-video-badge .ui-icon { width: 16px; height: 16px; }
+.dynamic-home.is-omni section > div { flex-wrap: wrap; }
+
+/* ===== Manager: wedding / business switch (manager keeps the RZ look) ===== */
+.gm-details-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.gm-details-head h2 { margin-bottom: 1.4rem; }
+.gm .gm-kind { display: inline-flex; padding: 3px; margin-bottom: 1.4rem; border-radius: 999px; background: #f1ebe2; border: 1px solid #e3d9cb; }
+.gm .gm-kind button { min-width: 104px; justify-content: center; padding: .55rem 1rem; border: 0; border-radius: 999px; background: none; color: #7a6d62; font-size: .72rem; font-weight: 600; letter-spacing: .04em; box-shadow: none; }
+.gm .gm-kind button.active { background: rgb(75, 11, 16); color: #fffdf8; }
+.gm-field-wide { grid-column: 1 / -1; }
+.gm-kind-tag { display: inline-block; margin-right: .5rem; padding: .15rem .5rem; border-radius: 999px; background: #efe7dc; color: rgb(75, 11, 16); font-size: .62rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.gm-raw .article-head p { max-width: 560px; }
+.gm-photos figure.is-video span { background: rgba(20, 14, 12, .72); color: #fff; border-radius: 999px; padding: .25rem .55rem; letter-spacing: .08em; text-transform: uppercase; }
+
+/* ===== OMNI client experience (business galleries only) ===== */
+/* Palette and type follow the OMNI proposal: ivory, navy, deep burgundy, Jost. */
+.omni-mark { display: block; width: auto; height: 26px; }
+.gallery-loading-omni { display: none; }
+html[data-brand="omni"] .gallery-loading-screen { background: #fffbeb; }
+html[data-brand="omni"] .gallery-loading-mark { display: none; }
+html[data-brand="omni"] .gallery-loading-omni { display: block; animation: omni-breathe 1.8s ease-in-out infinite; }
+html[data-brand="omni"] .gallery-loading-omni .omni-mark { height: 44px; }
+@keyframes omni-breathe { 0%, 100% { opacity: .35; transform: scale(.97); } 50% { opacity: 1; transform: scale(1); } }
+
+main.is-omni,
+main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
+  font-family: "Jost", "Heebo", Arial, sans-serif;
+}
+.dynamic-message.is-omni { background: #000249; color: #fffbeb; }
+.dynamic-message.is-omni .omni-mark { height: 40px; margin: 0 auto 1rem; }
+.dynamic-message.is-omni h1 { font-weight: 300; }
+.dynamic-message.is-omni p { color: rgba(255, 251, 235, .7); }
+
+/* Home */
+.dynamic-home.is-omni { background: #000249; }
+.dynamic-home.is-omni .dynamic-shade {
+  background:
+    linear-gradient(90deg, rgba(0, 2, 73, .86), rgba(0, 2, 73, .18)),
+    linear-gradient(0deg, rgba(0, 1, 40, .78), transparent);
+}
+.dynamic-home.is-omni header { letter-spacing: .24em; font-weight: 500; color: #fffbeb; }
+.dynamic-home.is-omni header .omni-mark { height: 30px; }
+.dynamic-home.is-omni section > small { color: #f2ebe3; letter-spacing: .32em; font-weight: 500; }
+.dynamic-home.is-omni h1 {
+  font-weight: 300;
+  font-size: clamp(3rem, 7.4vw, 7rem);
+  line-height: .98;
+  letter-spacing: -.02em;
+  color: #fffbeb;
+}
+.dynamic-home.is-omni section > p { color: rgba(255, 251, 235, .78); font-weight: 300; }
+.dynamic-home.is-omni .gallery-meta { color: rgba(242, 235, 227, .8) !important; letter-spacing: .2em; }
+.dynamic-home.is-omni section button {
+  background: #fffbeb;
+  color: #000249;
+  font-weight: 500;
+  letter-spacing: .16em;
+  border-radius: 999px;
+  padding-inline: 1.5rem;
+}
+.dynamic-home.is-omni section button small { color: #5b5959; letter-spacing: .1em; }
+.dynamic-home.is-omni section button:hover { background: #fff; }
+.dynamic-home.is-omni section > div > button:disabled,
+.dynamic-home.is-omni section > div > button:disabled:hover { background: #fffbeb; }
+.dynamic-home.is-omni .home-top-download,
+.dynamic-home.is-omni .home-share {
+  border-radius: 999px;
+  background: rgba(0, 2, 73, .38);
+  border-color: rgba(255, 251, 235, .45);
+  color: #fffbeb;
+  letter-spacing: .16em;
+}
+
+/* Photography / Raw materials */
+.dynamic-photos.is-omni { background: #000249; }
+.dynamic-photos.is-omni .dynamic-topbar,
+.dynamic-photos.is-omni .photo-utility-bar { background: #fffbeb; color: #000249; }
+.dynamic-photos.is-omni .dynamic-topbar { border-bottom-color: rgba(0, 2, 73, .1); }
+.dynamic-photos.is-omni .dynamic-topbar strong { letter-spacing: .24em; font-weight: 500; }
+.dynamic-photos.is-omni .dynamic-topbar small,
+.dynamic-photos.is-omni .photo-utility-bar > span { color: #5b5959; }
+.dynamic-photos.is-omni .photo-utility-bar > span { letter-spacing: .04em; }
+.dynamic-photos.is-omni .photo-page-actions > button,
+.dynamic-photos.is-omni .photo-page-actions > a {
+  color: #000249;
+  border-color: rgba(0, 2, 73, .28);
+  border-radius: 999px;
+  letter-spacing: .08em;
+}
+.dynamic-photos.is-omni .photo-page-actions > button:hover,
+.dynamic-photos.is-omni .photo-page-actions > a:hover,
+.dynamic-photos.is-omni .photo-page-actions > .is-active {
+  background: #000249;
+  border-color: #000249;
+  color: #fffbeb;
+}
+.dynamic-photos.is-omni .public-photo-tile { background: rgba(255, 251, 235, .06); }
+.dynamic-photos.is-omni .selection-tray { background: #000249; color: #fffbeb; }
+.dynamic-photos.is-omni .mobile-action-bar,
+.rzf.is-omni .mobile-action-bar { background: rgba(255, 251, 235, .96); color: #000249; }
+.dynamic-photos.is-omni .mobile-action-bar :is(button, a),
+.rzf.is-omni .mobile-action-bar :is(button, a) { color: #000249; }
+
+/* Films */
+.rzf.is-omni .rzf-omni { height: max(26px, 2vw); }
+.rzf.is-omni .rzf-copy h1 { font-weight: 300; letter-spacing: -.01em; }
+.rzf.is-omni .rzf-play-all { letter-spacing: .2em; }
+.rzf.is-omni .rzf-card-copy strong { font-weight: 400; }
+@media (max-width: 700px) {
+  .dynamic-home.is-omni header .omni-mark { height: 22px; }
+  .dynamic-photos.is-omni .dynamic-topbar .omni-mark { height: 20px; }
+}

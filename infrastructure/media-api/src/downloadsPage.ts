@@ -82,8 +82,18 @@ export function renderDownloadsPage(opts: {
   archiveHref: string;
   media: Item[];
   safeName: (name: string) => string;
+  brand?: "rz" | "omni";
 }) {
   const { names, galleryUrl, archiveHref, media, safeName } = opts;
+  const omni = opts.brand === "omni";
+  // Business galleries: OMNI palette (ivory, navy, deep burgundy) and Jost.
+  const omniStyle = omni
+    ? `:root{--cream:#fffbeb;--paper:#faf7f4;--ink:#000249;--muted:#5b5959;--line:#e9e2d6;--wine:#000249;--wine-2:#291617}
+body,h1,h2,.seal{font-family:Jost,Heebo,Arial,sans-serif}
+h1{font-weight:300;letter-spacing:-.01em}h2{font-weight:400}
+.seal{width:auto;height:auto;background:none;box-shadow:none;border-radius:0}.seal img{display:block;width:96px;height:auto;margin:0 auto}
+.cta{box-shadow:0 14px 30px rgba(0,2,73,.2)}.steps b{background:rgba(0,2,73,.08)}`
+    : "";
   const photoCount = media.filter((item) => item.type === "photo").length;
   const filmCount = media.length - photoCount;
   const tiles = media
@@ -103,9 +113,9 @@ export function renderDownloadsPage(opts: {
     filmCount ? `<span>${filmCount} <i data-i18n="films"></i></span>` : "",
   ].filter(Boolean).join('<em aria-hidden="true">·</em>');
 
-  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#fffdf8"><title>${esc(names)} · RZ</title>
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#fffdf8"><title>${esc(names)} · ${omni ? "OMNI" : "RZ"}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;1,400&family=Frank+Ruhl+Libre:wght@400&family=Heebo:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;1,400&family=Frank+Ruhl+Libre:wght@400&family=Heebo:wght@400;500;600${omni ? "&family=Jost:wght@300;400;500;600" : ""}&display=swap">
 <style>
 :root{--cream:#fffdf8;--paper:#f4efe7;--ink:#231c17;--muted:#7a6d62;--line:#e6dccf;--wine:rgb(75,11,16);--wine-2:#6a1820}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -153,6 +163,7 @@ h2{margin:0;font-family:"Playfair Display","Frank Ruhl Libre",Georgia,serif;font
 .toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));z-index:20;display:none;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:rgba(20,14,12,.9);color:#fff;font-size:13px;font-weight:500;transform:translateX(-50%);box-shadow:0 14px 40px rgba(0,0,0,.3);white-space:nowrap}
 .toast.show{display:inline-flex}
 @media(min-width:620px){.grid{grid-template-columns:repeat(4,1fr);gap:8px}main{padding-top:48px}}
+${omniStyle}
 </style></head><body>
 <header class="top">
   <a class="back" href="${esc(galleryUrl)}">${icon(ICONS.back)}<span data-i18n="back"></span></a>
@@ -160,7 +171,7 @@ h2{margin:0;font-family:"Playfair Display","Frank Ruhl Libre",Georgia,serif;font
 </header>
 <main>
   <section class="hero">
-    <div class="seal">RZ</div>
+    <div class="seal">${omni ? '<img src="https://rz-social-media.github.io/gallery/brand/omni-symbol-navy.png" alt="OMNI">' : "RZ"}</div>
     <p class="eyebrow" data-i18n="eyebrow"></p>
     <h1>${esc(names)}</h1>
     <div class="counts">${counts}</div>

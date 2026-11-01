@@ -40,6 +40,20 @@ const escapeHtml = (value: unknown) =>
 const basic = (id: string, secret: string) =>
   `Basic ${btoa(`${id}:${secret}`)}`;
 const ORPHAN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+// Galleries without a kind are weddings; business galleries carry OMNI branding.
+const isBusiness = (gallery: Record<string, any>) => gallery.kind === "business";
+const galleryName = (gallery: Record<string, any>) =>
+  isBusiness(gallery)
+    ? String(gallery.title || "")
+    : `${gallery.partnerOne || ""} & ${gallery.partnerTwo || ""}`;
+type Selection = "all" | "photos" | "videos" | "raw";
+const SELECTIONS = ["all", "photos", "videos", "raw"];
+// Raw materials are kept out of the wedding-style Photography and Films sets.
+const inSelection = (item: Record<string, any>, selection: Selection) =>
+  selection === "all" ||
+  (selection === "raw" && Boolean(item.raw)) ||
+  (selection === "photos" && item.type === "photo" && !item.raw) ||
+  (selection === "videos" && item.type === "video" && !item.raw);
 
 function authorized(request: Request, env: Env) {
   return (
@@ -289,7 +303,7 @@ async function galleryArchive(
   env: Env,
   gallery: Record<string, any>,
   slug: string,
-  selection: "all" | "photos" | "videos",
+  selection: Selection,
   selectedIds?: Set<string>,
   headOnly = false,
 ) {
@@ -297,9 +311,7 @@ async function galleryArchive(
     (item: Record<string, any>) =>
       item.originalKey?.startsWith(`couples/${slug}/`) &&
       (!selectedIds?.size || selectedIds.has(String(item.id))) &&
-      (selection === "all" ||
-        (selection === "photos" && item.type === "photo") ||
-        (selection === "videos" && item.type === "video")),
+      inSelection(item, selection),
   );
   if (!media.length) return null;
   // Sizes and checksums stored at upload (measured from the real bytes) avoid a
@@ -313,7 +325,7 @@ async function galleryArchive(
       const known = typeof item.crc32 === "number" && typeof item.size === "number";
       const head = known ? null : await env.MEDIA.head(item.originalKey);
       if (!known && !head) continue;
-      const folder = item.type === "photo" ? "Photos" : "Films";
+      const folder = item.raw ? "Raw materials" : item.type === "photo" ? "Photos" : "Films";
       resolved[index] = {
         name: `${folder}/${String(index + 1).padStart(3, "0")}-${safeName(item.filename || `${item.type}-${index + 1}`)}`,
         size: known ? item.size : head!.size,
@@ -330,7 +342,7 @@ async function galleryArchive(
       "Content-Type": "application/zip",
       "Content-Length": String(zipLength(entries)),
     }),
-    suffix = selection === "all" ? "gallery" : selection;
+    suffix = selection === "all" ? "gallery" : selection === "raw" ? "raw-materials" : selection;
   headers.set(
     "Content-Disposition",
     `attachment; filename="${slug}-${suffix}.zip"`,
@@ -339,8 +351,8 @@ async function galleryArchive(
   headers.set("Cache-Control", "private,no-store");
   return new Response(headOnly ? null : zipStream(entries), { status: 200, headers });
 }
-function publicGalleryUrl(slug: string) {
-  return `https://rz-social-media.github.io/gallery/couple/?id=${encodeURIComponent(slug)}`;
+function publicGalleryUrl(slug: string, gallery?: Record<string, any>) {
+  return `https://rz-social-media.github.io/gallery/couple/?id=${encodeURIComponent(slug)}${gallery && isBusiness(gallery) ? "&brand=omni" : ""}`;
 }
 function galleryCover(gallery: Record<string, any>) {
   return (
@@ -352,12 +364,14 @@ function galleryCover(gallery: Record<string, any>) {
   );
 }
 function sharePage(gallery: Record<string, any>, slug: string) {
-  const names = `${gallery.partnerOne || ""} & ${gallery.partnerTwo || ""}`;
+  const names = galleryName(gallery);
   const details = [gallery.weddingDate, gallery.location].filter(Boolean).join(" · ");
-  const destination = publicGalleryUrl(slug);
+  const destination = publicGalleryUrl(slug, gallery);
+  const site = isBusiness(gallery) ? "OMNI" : "RZ Weddings";
+  const imageAlt = isBusiness(gallery) ? `${names} gallery` : `${names} wedding gallery`;
   const cover = galleryCover(gallery);
   return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | RZ Weddings</title><meta name="description" content="${escapeHtml(details)}"><meta property="og:type" content="website"><meta property="og:site_name" content="RZ Weddings"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(details)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(`${names} wedding gallery`)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(details)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><meta name="description" content="${escapeHtml(details)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(details)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(details)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -369,26 +383,25 @@ function sharePage(gallery: Record<string, any>, slug: string) {
 function mobileDownloadsPage(
   gallery: Record<string, any>,
   slug: string,
-  selection: "all" | "photos" | "videos",
+  selection: Selection,
   selectedIds?: Set<string>,
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
       item.originalKey?.startsWith(`couples/${slug}/`) &&
       (!selectedIds?.size || selectedIds.has(String(item.id))) &&
-      (selection === "all" ||
-        (selection === "photos" && item.type === "photo") ||
-        (selection === "videos" && item.type === "video")),
+      inSelection(item, selection),
   );
-  const names = `${gallery.partnerOne || ""} & ${gallery.partnerTwo || ""}`;
+  const names = galleryName(gallery);
   const archiveHref = `/api/galleries/${encodeURIComponent(slug)}/download?type=${selection}${selectedIds?.size ? `&ids=${encodeURIComponent([...selectedIds].join(","))}` : ""}`;
   return new Response(
     renderDownloadsPage({
       names,
-      galleryUrl: publicGalleryUrl(slug),
+      galleryUrl: publicGalleryUrl(slug, gallery),
       archiveHref,
       media,
       safeName,
+      brand: isBusiness(gallery) ? "omni" : "rz",
     }),
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
   );
@@ -552,6 +565,7 @@ export default {
           originalKey: string;
           title: string;
           coupleSlug: string;
+          raw?: boolean;
         }>();
         if (
           !body.originalKey.startsWith(
@@ -577,9 +591,13 @@ export default {
           body: JSON.stringify({
             inputs: [{ url: inputUrl }],
             playback_policies: ["public"],
-            video_quality: "premium",
-            max_resolution_tier: "2160p",
-            static_renditions: [{ resolution: "highest" }],
+            ...(body.raw
+              ? { video_quality: "basic", max_resolution_tier: "2160p" }
+              : {
+                  video_quality: "premium",
+                  max_resolution_tier: "2160p",
+                  static_renditions: [{ resolution: "highest" }],
+                }),
             passthrough: JSON.stringify({
               managedBy: "rz-gallery-v1",
               coupleSlug: slug,
@@ -666,9 +684,15 @@ export default {
         if (!object) return json({ error: "Gallery not found" }, 404, origin);
         const gallery = await object.json<Record<string, any>>();
         const issues: string[] = [];
-        if (!gallery.partnerOne || !gallery.partnerTwo) issues.push("Add both partner names");
-        if (!gallery.weddingDate) issues.push("Add the wedding date");
-        if (!gallery.location) issues.push("Add the wedding location");
+        if (isBusiness(gallery)) {
+          if (!gallery.title) issues.push("Add the gallery name");
+          if (!gallery.weddingDate) issues.push("Add the date");
+          if (!gallery.location) issues.push("Add the location");
+        } else {
+          if (!gallery.partnerOne || !gallery.partnerTwo) issues.push("Add both partner names");
+          if (!gallery.weddingDate) issues.push("Add the wedding date");
+          if (!gallery.location) issues.push("Add the wedding location");
+        }
         const media = Array.isArray(gallery.media) ? gallery.media : [];
         if (!media.length) issues.push("Add at least one photo or film");
         if (!gallery.computerCoverUrl && !media.some((item: any) => item.url || item.posterUrl))
@@ -707,7 +731,7 @@ export default {
             ok: issues.length === 0,
             issues,
             checks: {
-              details: Boolean(gallery.partnerOne && gallery.partnerTwo && gallery.weddingDate && gallery.location),
+              details: Boolean((isBusiness(gallery) ? gallery.title : gallery.partnerOne && gallery.partnerTwo) && gallery.weddingDate && gallery.location),
               storage: storageChecks.every(({ stored }) => stored),
               streaming: streamChecks.every(({ ok }) => ok) && !media.some((item: any) => item.type === "video" && !item.playbackId),
               covers: Boolean((gallery.computerCoverUrl || media.some((item: any) => item.url || item.posterUrl)) && (gallery.phoneCoverUrl || media.some((item: any) => item.url || item.posterUrl))),
@@ -723,7 +747,7 @@ export default {
       if (archiveMatch && (request.method === "GET" || request.method === "HEAD")) {
         const slug = safeSlug(archiveMatch[1]),
           selection = url.searchParams.get("type") || "all";
-        if (!["all", "photos", "videos"].includes(selection))
+        if (!SELECTIONS.includes(selection))
           return json({ error: "Invalid download type" }, 400, origin);
         const object = await env.MEDIA.get(`galleries/${slug}.json`);
         if (!object) return json({ error: "Gallery not found" }, 404, origin);
@@ -737,7 +761,7 @@ export default {
           env,
           gallery,
           slug,
-          selection as "all" | "photos" | "videos",
+          selection as Selection,
           selectedIds,
           request.method === "HEAD",
         );
@@ -749,7 +773,7 @@ export default {
       if (downloadsMatch && request.method === "GET") {
         const slug = safeSlug(downloadsMatch[1]);
         const selection = url.searchParams.get("type") || "all";
-        if (!["all", "photos", "videos"].includes(selection))
+        if (!SELECTIONS.includes(selection))
           return json({ error: "Invalid download type" }, 400, origin);
         const object = await env.MEDIA.get(`galleries/${slug}.json`);
         if (!object) return new Response("Gallery not found", { status: 404 });
@@ -759,7 +783,7 @@ export default {
         return mobileDownloadsPage(
           gallery,
           slug,
-          selection as "all" | "photos" | "videos",
+          selection as Selection,
           new Set(
             (url.searchParams.get("ids") || "").split(",").filter(Boolean).slice(0, 500),
           ),

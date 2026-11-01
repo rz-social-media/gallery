@@ -18,6 +18,7 @@ type Media = {
   sha256?: string;
   crc32?: number;
   size?: number;
+  raw?: boolean;
 };
 type QueueItem = {
   id: string;
@@ -27,10 +28,13 @@ type QueueItem = {
   status: "queued" | "uploading" | "processing" | "done" | "skipped" | "failed";
   progress: number;
   error?: string;
+  raw?: boolean;
 };
 
 type Gallery = {
   slug: string;
+  kind?: "wedding" | "business";
+  title?: string;
   partnerOne: string;
   partnerTwo: string;
   location: string;
@@ -62,6 +66,24 @@ const slugify = (s: string) =>
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+// Galleries without a kind are weddings. Business galleries use one title instead of two names.
+const isBusiness = (g: Pick<Gallery, "kind">) => g.kind === "business";
+const galleryName = (g: Gallery) =>
+  isBusiness(g) ? g.title || "" : [g.partnerOne, g.partnerTwo].filter(Boolean).join(" & ");
+const hasName = (g: Gallery) =>
+  isBusiness(g) ? Boolean(g.title?.trim()) : Boolean(g.partnerOne && g.partnerTwo);
+const titleSlug = (title: string) => {
+  if (!title.trim()) return "";
+  const latin = slugify(title);
+  if (latin.length >= 3) return latin;
+  // Hebrew-only titles slugify to nothing; a stable hash keeps the link deterministic.
+  let hash = 0;
+  for (const char of title.trim()) hash = (Math.imul(hash, 31) + char.codePointAt(0)!) >>> 0;
+  return `omni-${hash.toString(36)}`;
+};
+const gallerySlug = (g: Gallery) =>
+  g.slug || (isBusiness(g) ? titleSlug(g.title || "") : slugify(`${g.partnerOne}-${g.partnerTwo}`));
+const brandQuery = (g: Gallery) => (isBusiness(g) ? "&brand=omni" : "");
 
 export default function Manager() {
   const [code, setCode] = useState(""),
@@ -223,8 +245,8 @@ export default function Manager() {
     }
   }
   async function save(g: Gallery, published: boolean) {
-    const slug = g.slug || slugify(`${g.partnerOne}-${g.partnerTwo}`);
-    if (!slug) return setNotice("Add both names first");
+    const slug = gallerySlug(g);
+    if (!slug) return setNotice(isBusiness(g) ? "Add the gallery name first" : "Add both names first");
     setBusy(true);
     setNotice("");
     try {
@@ -239,8 +261,9 @@ export default function Manager() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               originalKey: item.originalKey,
-              title: item.title || "Wedding film",
+              title: item.title || (isBusiness(g) ? "Film" : "Wedding film"),
               coupleSlug: slug,
+              ...(item.raw ? { raw: true } : {}),
             }),
           });
           media[index] = { ...item, assetId: created.assetId };
@@ -288,7 +311,7 @@ export default function Manager() {
     setBusy(false);
   }
   async function deleteFromDashboard(gallery: Gallery) {
-    const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
+    const names = galleryName(gallery);
     if (
       !window.confirm(
         `Move ${names}'s gallery to Trash? You can restore it for 30 days.`,
@@ -401,7 +424,7 @@ export default function Manager() {
             <p>Galleries are permanently deleted after 30 days.</p>
             {trashRows.length === 0 ? <p>Trash is empty.</p> : trashRows.map((gallery) => (
               <article key={gallery.slug}>
-                <span>{gallery.partnerOne} &amp; {gallery.partnerTwo}</span>
+                <span>{galleryName(gallery)}</span>
                 <small>{gallery.deletedAt ? new Date(gallery.deletedAt).toLocaleDateString() : ""}</small>
                 <button onClick={() => void restoreGallery(gallery)}>Restore</button>
               </article>
@@ -434,9 +457,9 @@ export default function Manager() {
                     <span>{g.published ? "Live" : "Draft"}</span>
                   </div>
                   <h2>
-                    {g.partnerOne} <i>&</i> {g.partnerTwo}
+                    {isBusiness(g) ? g.title : <>{g.partnerOne} <i>&</i> {g.partnerTwo}</>}
                   </h2>
-                  <p>{g.location || "Location not added"}</p>
+                  <p>{isBusiness(g) && <b className="gm-kind-tag">Business</b>}{g.location || "Location not added"}</p>
                   <small className="gm-card-stats">
                     {analytics[g.slug]?.view || 0} views · {analytics[g.slug]?.play || 0} plays · {analytics[g.slug]?.download || 0} downloads
                   </small>
@@ -452,7 +475,7 @@ export default function Manager() {
                         current === g.slug ? null : g.slug,
                       )
                     }
-                    aria-label={`Actions for ${g.partnerOne} and ${g.partnerTwo}`}
+                    aria-label={`Actions for ${galleryName(g)}`}
                     aria-expanded={openMenu === g.slug}
                   >
                     <GmIcon name="more" />
@@ -493,7 +516,7 @@ export default function Manager() {
       {quickPreview?.previewToken && (
         <div className="preview-modal" role="dialog" aria-modal="true">
           <div className="preview-toolbar">
-            <strong>{quickPreview.partnerOne} &amp; {quickPreview.partnerTwo}</strong>
+            <strong>{galleryName(quickPreview)}</strong>
             <div>
               <button className={quickPreviewMode === "computer" ? "active" : ""} onClick={() => setQuickPreviewMode("computer")}>Computer</button>
               <button className={quickPreviewMode === "phone" ? "active" : ""} onClick={() => setQuickPreviewMode("phone")}>Phone</button>
@@ -501,7 +524,7 @@ export default function Manager() {
             </div>
           </div>
           <div className={`preview-device is-${quickPreviewMode}`}>
-            <iframe title="Client gallery preview" src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(quickPreview.slug)}&preview=${encodeURIComponent(quickPreview.previewToken)}`} />
+            <iframe title="Client gallery preview" src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(quickPreview.slug)}&preview=${encodeURIComponent(quickPreview.previewToken)}${brandQuery(quickPreview)}`} />
           </div>
         </div>
       )}
@@ -566,6 +589,7 @@ function Editor({
     [elapsedSeconds, setElapsedSeconds] = useState(0),
     [videoStates, setVideoStates] = useState<Record<string, string>>({}),
     [dropActive, setDropActive] = useState(false),
+    [rawDropActive, setRawDropActive] = useState(false),
     [draggedMediaId, setDraggedMediaId] = useState<string | null>(null),
     [coverFor, setCoverFor] = useState<string | null>(null),
     [galleryCoverFor, setGalleryCoverFor] = useState<
@@ -697,6 +721,8 @@ function Editor({
     }
   }, [gallery.publishPending, pendingFilms, readyFilms]);
   const set = (k: keyof Gallery, v: any) => change({ ...gallery, [k]: v });
+  const business = isBusiness(gallery);
+  const rawMedia = gallery.media.filter((item) => item.raw);
   async function persist(value: Gallery) {
     const response = await fetch(`${API}/api/galleries/${value.slug}`, {
       method: "POST",
@@ -755,8 +781,8 @@ function Editor({
     };
   }, [missingChecksums, gallery.slug, uploading]);
   useEffect(() => {
-    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
-    if (!slug || !gallery.partnerOne || !gallery.partnerTwo) return;
+    const slug = gallerySlug(gallery);
+    if (!slug || !hasName(gallery)) return;
     const candidate = { ...gallery, slug };
     const serialized = JSON.stringify(candidate);
     if (serialized === lastAutosaved.current) return;
@@ -775,8 +801,8 @@ function Editor({
     return () => window.clearTimeout(timer);
   }, [gallery]);
   async function openPreview() {
-    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
-    if (!slug) return alert("Add both names first");
+    const slug = gallerySlug(gallery);
+    if (!slug) return alert(isBusiness(gallery) ? "Add the gallery name first" : "Add both names first");
     const updated = {
       ...galleryRef.current,
       slug,
@@ -789,8 +815,8 @@ function Editor({
     setPreviewMode("computer");
   }
   async function runHealthCheck() {
-    const slug = gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
-    if (!slug) return alert("Add both names first");
+    const slug = gallerySlug(gallery);
+    if (!slug) return alert(isBusiness(gallery) ? "Add the gallery name first" : "Add both names first");
     setCheckingHealth(true);
     try {
       await persist({ ...galleryRef.current, slug, published: false });
@@ -854,9 +880,7 @@ function Editor({
   const automaticCover = coverCandidates[0]?.url;
   async function deleteGallery() {
     if (!gallery.slug) return;
-    const names =
-      [gallery.partnerOne, gallery.partnerTwo].filter(Boolean).join(" & ") ||
-      gallery.slug;
+    const names = galleryName(gallery) || gallery.slug;
     if (
       !window.confirm(
         `Move ${names}'s gallery to Trash?\n\nYou can restore it for 30 days before the files are permanently removed.`,
@@ -1012,19 +1036,23 @@ function Editor({
     }
     return parseInt(hash.digest("hex"), 16);
   }
-  async function addFiles(files: File[], retryIds?: string[]) {
+  async function addFiles(files: File[], retryIds?: string[], raw: boolean | boolean[] = false) {
     if (uploading || !files.length) return;
-    const slug =
-      gallery.slug || slugify(`${gallery.partnerOne}-${gallery.partnerTwo}`);
-    if (!slug) return alert("Add both names first");
-    const supported = files.filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
-    const items: QueueItem[] = supported.map((file, index) => ({
-      id: retryIds?.[index] || crypto.randomUUID(),
+    const slug = gallerySlug(gallery);
+    if (!slug) return alert(isBusiness(gallery) ? "Add the gallery name first" : "Add both names first");
+    const isRaw = (index: number) => (Array.isArray(raw) ? Boolean(raw[index]) : raw);
+    const accepted = files
+      .map((file, index) => ({ file, raw: isRaw(index), retryId: retryIds?.[index] }))
+      .filter(({ file }) => file.type.startsWith("image/") || file.type.startsWith("video/"));
+    const supported = accepted.map(({ file }) => file);
+    const items: QueueItem[] = accepted.map(({ file, raw, retryId }) => ({
+      id: retryId || crypto.randomUUID(),
       name: file.name,
       size: file.size,
       kind: file.type.startsWith("image/") ? "photo" : "film",
       status: "queued",
       progress: 0,
+      ...(raw ? { raw: true } : {}),
     }));
     items.forEach((item, index) => queueFiles.current.set(item.id, supported[index]));
     setQueue((current) => {
@@ -1033,6 +1061,8 @@ function Editor({
     });
     for (const [index, file] of supported.entries()) {
       const queueId = items[index].id;
+      const rawFile = Boolean(items[index].raw);
+      const rawFlag = rawFile ? { raw: true as const } : {};
       currentQueueId.current = queueId;
       patchQueue(queueId, { status: "uploading", progress: 0, error: undefined });
       setUploading(file.name);
@@ -1043,7 +1073,10 @@ function Editor({
         const [sha256, crc32] = await Promise.all([fingerprint(file), checksum(file)]);
         if (
           galleryRef.current.media.some(
-            (item) => item.type === (file.type.startsWith("image/") ? "photo" : "video") && item.sha256 === sha256,
+            (item) =>
+              item.type === (file.type.startsWith("image/") ? "photo" : "video") &&
+              item.sha256 === sha256 &&
+              Boolean(item.raw) === rawFile,
           )
         ) {
           patchQueue(queueId, { status: "skipped", progress: 100 });
@@ -1073,6 +1106,7 @@ function Editor({
               size: file.size,
               originalKey,
               url: `${API}/media/${webKey}`,
+              ...rawFlag,
             },
           ];
           const updated = { ...galleryRef.current, slug, media };
@@ -1098,7 +1132,7 @@ function Editor({
             {
               id: crypto.randomUUID(),
               type: "video" as const,
-              title: file.name.replace(/\.[^.]+$/, "") || "Wedding film",
+              title: file.name.replace(/\.[^.]+$/, "") || (isBusiness(galleryRef.current) ? "Film" : "Wedding film"),
               alt: "",
               filename: file.name,
               sha256,
@@ -1106,6 +1140,7 @@ function Editor({
               size: file.size,
               originalKey,
               posterUrl: `${API}/media/${posterKey}`,
+              ...rawFlag,
             },
           ];
           const updated = { ...galleryRef.current, slug, media };
@@ -1185,7 +1220,7 @@ function Editor({
           <div className={`preview-device is-${previewMode}`}>
             <iframe
               title="Client gallery preview"
-              src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(galleryRef.current.slug)}&preview=${encodeURIComponent(galleryRef.current.previewToken)}`}
+              src={`${window.location.origin}${BASE}/couple/?id=${encodeURIComponent(galleryRef.current.slug)}&preview=${encodeURIComponent(galleryRef.current.previewToken)}${brandQuery(galleryRef.current)}`}
             />
           </div>
         </div>
@@ -1193,26 +1228,50 @@ function Editor({
       <section className="gm-edit">
         <small>Gallery details</small>
         <h1>
-          {gallery.partnerOne || "Partner one"} <i>&</i>{" "}
-          {gallery.partnerTwo || "Partner two"}
+          {business ? (
+            gallery.title || "Gallery name"
+          ) : (
+            <>
+              {gallery.partnerOne || "Partner one"} <i>&</i>{" "}
+              {gallery.partnerTwo || "Partner two"}
+            </>
+          )}
         </h1>
         <article>
-          <h2>Story details</h2>
+          <div className="gm-details-head">
+            <h2>Story details</h2>
+            <div className="gm-kind" role="radiogroup" aria-label="Gallery type">
+              <button role="radio" aria-checked={!business} className={!business ? "active" : ""} onClick={() => set("kind", "wedding")}>Weddings</button>
+              <button role="radio" aria-checked={business} className={business ? "active" : ""} onClick={() => set("kind", "business")}>Business</button>
+            </div>
+          </div>
           <div className="fields">
-            <label>
-              Partner one
-              <input
-                value={gallery.partnerOne}
-                onChange={(e) => set("partnerOne", e.target.value)}
-              />
-            </label>
-            <label>
-              Partner two
-              <input
-                value={gallery.partnerTwo}
-                onChange={(e) => set("partnerTwo", e.target.value)}
-              />
-            </label>
+            {business ? (
+              <label className="gm-field-wide">
+                Gallery name
+                <input
+                  value={gallery.title || ""}
+                  onChange={(e) => set("title", e.target.value)}
+                />
+              </label>
+            ) : (
+              <>
+                <label>
+                  Partner one
+                  <input
+                    value={gallery.partnerOne}
+                    onChange={(e) => set("partnerOne", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Partner two
+                  <input
+                    value={gallery.partnerTwo}
+                    onChange={(e) => set("partnerTwo", e.target.value)}
+                  />
+                </label>
+              </>
+            )}
             <label>
               Location
               <input
@@ -1221,7 +1280,7 @@ function Editor({
               />
             </label>
             <label>
-              Wedding date
+              {business ? "Date" : "Wedding date"}
               <input
                 type="date"
                 value={gallery.weddingDate}
@@ -1306,7 +1365,11 @@ function Editor({
                       <button
                         onClick={() => {
                           const failed = queue.filter((item) => item.status === "failed" && queueFiles.current.has(item.id));
-                          void addFiles(failed.map((item) => queueFiles.current.get(item.id)!), failed.map((item) => item.id));
+                          void addFiles(
+                            failed.map((item) => queueFiles.current.get(item.id)!),
+                            failed.map((item) => item.id),
+                            failed.map((item) => Boolean(item.raw)),
+                          );
                         }}
                       >
                         Retry failed
@@ -1345,14 +1408,14 @@ function Editor({
             <div>
               <small>Photography</small>
               <strong>
-                {gallery.media.filter((item) => item.type === "photo").length} photos
+                {gallery.media.filter((item) => item.type === "photo" && !item.raw).length} photos
               </strong>
             </div>
             <span>Drag to reorder · First photo is the gallery cover</span>
           </div>
           <div className="gm-photos">
             {gallery.media
-              .filter((x) => x.type === "photo")
+              .filter((x) => x.type === "photo" && !x.raw)
               .map((p, i) => (
                 <figure
                   key={p.id}
@@ -1384,13 +1447,13 @@ function Editor({
             <div>
               <small>Films</small>
               <strong>
-                {gallery.media.filter((item) => item.type === "video").length} films
+                {gallery.media.filter((item) => item.type === "video" && !item.raw).length} films
               </strong>
             </div>
             <span>Every film includes a cover</span>
           </div>
           {gallery.media
-            .filter((x) => x.type === "video")
+            .filter((x) => x.type === "video" && !x.raw)
             .map((v) => (
               <div
                 className={`film ${v.assetId && !v.playbackId ? "is-processing" : ""}`}
@@ -1446,7 +1509,7 @@ function Editor({
                 </div>
                 <div className="film-actions">
                   <button
-                    className={gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video")[0]?.id === v.id) ? "is-featured-film" : ""}
+                    className={gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video" && !item.raw)[0]?.id === v.id) ? "is-featured-film" : ""}
                     onClick={() => {
                       const updated = { ...galleryRef.current, featuredVideoId: v.id };
                       galleryRef.current = updated;
@@ -1454,7 +1517,7 @@ function Editor({
                       void persist(updated);
                     }}
                   >
-                    {gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video")[0]?.id === v.id) ? "Background film ✓" : "Set as background"}
+                    {gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video" && !item.raw)[0]?.id === v.id) ? "Background film ✓" : "Set as background"}
                   </button>
                   <button onClick={() => setCoverFor(v.id)}>
                     Choose cover
@@ -1474,10 +1537,98 @@ function Editor({
               </div>
             ))}
         </article>
+        {business && (
+          <article className="gm-raw">
+            <div className="article-head">
+              <div>
+                <small>02</small>
+                <h2>Raw materials</h2>
+                <p>Photos and videos together in one gallery. The client only sees this section once you add files.</p>
+              </div>
+            </div>
+            <label
+              className={`media-dropzone ${rawDropActive ? "is-active" : ""} ${uploading ? "is-busy" : ""}`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setRawDropActive(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node))
+                  setRawDropActive(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setRawDropActive(false);
+                if (!uploading) void addFiles([...event.dataTransfer.files], undefined, true);
+              }}
+            >
+              <GmIcon name="upload" />
+              <strong>{uploading ? "Uploading your files…" : "Drop raw photos & videos here"}</strong>
+              <span>{uploading ? "You can add more once this batch finishes" : "or click to choose · JPG, PNG, MP4, MOV"}</span>
+              <input
+                hidden
+                multiple
+                type="file"
+                disabled={Boolean(uploading)}
+                accept="image/*,video/*"
+                onClick={(e) => {
+                  e.currentTarget.value = "";
+                }}
+                onChange={(e) => {
+                  const files = [...(e.currentTarget.files || [])];
+                  e.currentTarget.value = "";
+                  if (files.length) void addFiles(files, undefined, true);
+                }}
+              />
+            </label>
+            <div className="media-section-title">
+              <div>
+                <small>Raw materials</small>
+                <strong>
+                  {rawMedia.filter((item) => item.type === "photo").length} photos ·{" "}
+                  {rawMedia.filter((item) => item.type === "video").length} videos
+                </strong>
+              </div>
+              <span>Drag to reorder · Videos stream once you publish</span>
+            </div>
+            <div className="gm-photos">
+              {rawMedia.map((item) => (
+                <figure
+                  key={item.id}
+                  className={item.type === "video" ? "is-video" : ""}
+                  draggable
+                  onDragStart={() => setDraggedMediaId(item.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => moveMedia(item.id)}
+                  title="Drag to reorder"
+                >
+                  <img src={item.type === "photo" ? item.url : item.posterUrl} alt="" />
+                  {item.type === "video" && <span>Video</span>}
+                  <b className="media-ready-badge">
+                    {item.type === "photo" || item.playbackId ? "Ready" : item.assetId ? "Processing" : "Uploaded"}
+                  </b>
+                  <button
+                    onClick={() =>
+                      void updateMedia(
+                        galleryRef.current.media.filter(
+                          (media) => media.id !== item.id,
+                        ),
+                      )
+                    }
+                    aria-label={`Remove ${item.filename}`}
+                  >
+                    ×
+                  </button>
+                </figure>
+              ))}
+            </div>
+          </article>
+        )}
         <article className="gallery-covers-editor">
           <div className="article-head">
             <div>
-              <small>02</small>
+              <small>{business ? "03" : "02"}</small>
               <h2>Gallery covers</h2>
               <p>
                 Choose one image for computers and one for phones. If you leave
@@ -1606,7 +1757,7 @@ function Editor({
           <aside>
             {notice}
             {gallery.published && (
-              <a href={`${BASE}/couple/?id=${gallery.slug}`} target="_blank">
+              <a href={`${BASE}/couple/?id=${gallery.slug}${brandQuery(gallery)}`} target="_blank">
                 Open gallery ↗
               </a>
             )}

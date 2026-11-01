@@ -7,6 +7,14 @@ import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev";
+type View = "home" | "photos" | "films" | "raw";
+const isView = (value: string): value is Exclude<View, "home"> =>
+  value === "photos" || value === "films" || value === "raw";
+// Business links carry ?brand=omni so the very first paint (before the gallery loads) is already OMNI.
+const BRAND_SCRIPT = `if(/[?&]brand=omni(&|$)/.test(location.search))document.documentElement.dataset.brand="omni"`;
+function OmniMark({ tone = "navy", className = "" }: { tone?: "navy" | "ivory"; className?: string }) {
+  return <img className={`omni-mark ${className}`} src={`${BASE}/brand/omni-symbol-${tone}.png`} alt="OMNI" />;
+}
 type Media = {
   id: string;
   type: "photo" | "video";
@@ -17,9 +25,12 @@ type Media = {
   alt: string;
   originalKey: string;
   filename: string;
+  raw?: boolean;
 };
 type Gallery = {
   slug: string;
+  kind?: "wedding" | "business";
+  title?: string;
   partnerOne: string;
   partnerTwo: string;
   location: string;
@@ -35,7 +46,9 @@ type Gallery = {
 export default function CoupleGallery() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"home" | "photos" | "films">("home");
+  const [view, setView] = useState<View>("home");
+  const [omniHint, setOmniHint] = useState(false);
+  const [activeRawFilm, setActiveRawFilm] = useState<Media | null>(null);
   const [activePhoto, setActivePhoto] = useState<number | null>(null);
   const [activeFilm, setActiveFilm] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -71,9 +84,10 @@ export default function CoupleGallery() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
     const preview = params.get("preview");
+    setOmniHint(params.get("brand") === "omni");
     setSharedPhotoIds((params.get("photos") || "").split(",").filter(Boolean).slice(0, 10));
     const initialView = window.location.hash.replace("#", "");
-    if (initialView === "photos" || initialView === "films") {
+    if (isView(initialView)) {
       window.history.replaceState({ view: "home" }, "", `${window.location.pathname}${window.location.search}`);
       window.history.pushState({ view: initialView }, "", `#${initialView}`);
       setView(initialView);
@@ -103,7 +117,7 @@ export default function CoupleGallery() {
   useEffect(() => {
     const onPopState = () => {
       const next = window.location.hash.replace("#", "");
-      setView(next === "photos" || next === "films" ? next : "home");
+      setView(isView(next) ? next : "home");
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -111,7 +125,7 @@ export default function CoupleGallery() {
   useEffect(() => {
     if (activePhoto === null || !gallery) return;
     const photoCount = gallery.media.filter(
-      (item) => item.type === "photo" && item.url,
+      (item) => item.type === "photo" && item.url && Boolean(item.raw) === (view === "raw"),
     ).length;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setActivePhoto(null);
@@ -131,11 +145,20 @@ export default function CoupleGallery() {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [activePhoto, gallery]);
+  }, [activePhoto, gallery, view]);
+  useEffect(() => {
+    if (gallery?.kind !== "business") return;
+    document.documentElement.dataset.brand = "omni";
+    document.title = `${gallery.title || "Gallery"} | OMNI`;
+    document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach((link) => {
+      link.href = `${BASE}/brand/omni-favicon.png`;
+      link.removeAttribute("type");
+    });
+  }, [gallery]);
   if (error)
     return (
-      <main className="dynamic-message">
-        <span className="brand-seal">RZ</span>
+      <main className={`dynamic-message${omniHint ? " is-omni" : ""}`}>
+        {omniHint ? <OmniMark tone="ivory" /> : <span className="brand-seal">RZ</span>}
         <h1>Gallery unavailable</h1>
         <p>{error}</p>
       </main>
@@ -143,21 +166,36 @@ export default function CoupleGallery() {
   if (!gallery)
     return (
       <main className="gallery-loading-screen" aria-label="Loading gallery">
+        <script dangerouslySetInnerHTML={{ __html: BRAND_SCRIPT }} />
         <span className="gallery-loading-mark" aria-hidden="true">
           <span>RZ</span>
           <span>RZ</span>
         </span>
+        <span className="gallery-loading-omni" aria-hidden="true">
+          <OmniMark />
+        </span>
         <span className="visually-hidden">Loading gallery</span>
       </main>
     );
-  const allPhotos = gallery.media.filter((m) => m.type === "photo" && m.url);
+  const business = gallery.kind === "business";
+  const brandClass = business ? " is-omni" : "";
+  const omniFonts = business && (
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Heebo:wght@300;400;500&display=swap" />
+  );
+  const allPhotos = gallery.media.filter((m) => m.type === "photo" && m.url && !m.raw);
   const photos = sharedPhotoIds.length
     ? allPhotos.filter((photo) => sharedPhotoIds.includes(photo.id))
     : allPhotos;
-  const films = gallery.media.filter((m) => m.type === "video" && m.playbackId);
+  const films = gallery.media.filter((m) => m.type === "video" && m.playbackId && !m.raw);
+  const rawMedia = gallery.media.filter(
+    (m) => m.raw && ((m.type === "photo" && m.url) || (m.type === "video" && m.playbackId)),
+  );
+  const rawPhotos = rawMedia.filter((m) => m.type === "photo");
+  // The photo viewer walks the gallery's photos, or only the raw photos on the Raw materials page.
+  const viewerPhotos = view === "raw" ? rawPhotos : photos;
   const featuredFilm =
     films.find((film) => film.id === gallery.featuredVideoId) || films[0];
-  const names = `${gallery.partnerOne} & ${gallery.partnerTwo}`;
+  const names = business ? gallery.title || "" : `${gallery.partnerOne} & ${gallery.partnerTwo}`;
   const automaticCover =
     photos[0]?.url ||
     gallery.media.find((item) => item.type === "video" && item.posterUrl)
@@ -175,9 +213,9 @@ export default function CoupleGallery() {
   const sharedIdsSuffix = sharedPhotoIds.length
     ? `&ids=${encodeURIComponent(sharedPhotoIds.join(","))}`
     : "";
-  const downloadUrl = (type: "all" | "photos" | "videos") =>
+  const downloadUrl = (type: "all" | "photos" | "videos" | "raw") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/download?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
-  const mobileDownloadUrl = (type: "all" | "photos" | "videos") =>
+  const mobileDownloadUrl = (type: "all" | "photos" | "videos" | "raw") =>
     `${API}/api/galleries/${encodeURIComponent(gallery.slug)}/downloads?type=${type}${type === "photos" ? sharedIdsSuffix : ""}`;
   const startDownload = async (
     event: ReactMouseEvent<HTMLAnchorElement>,
@@ -227,7 +265,7 @@ export default function CoupleGallery() {
   const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${gallery.updatedAt ? `?v=${encodeURIComponent(gallery.updatedAt)}` : ""}`;
   const shareGallery = async () => {
     if (navigator.share) {
-      await navigator.share({ title: names, text: `${names} wedding gallery`, url: shareUrl });
+      await navigator.share({ title: names, text: business ? `${names} gallery` : `${names} wedding gallery`, url: shareUrl });
       return;
     }
     await navigator.clipboard.writeText(shareUrl);
@@ -308,7 +346,7 @@ export default function CoupleGallery() {
     setActivePhoto(index);
     if (!sessionStorage.getItem("rz-swipe-hint")) setShowSwipeHint(true);
   };
-  const openView = (next: "photos" | "films") => {
+  const openView = (next: Exclude<View, "home">) => {
     window.history.pushState({ view: next }, "", `#${next}`);
     setView(next);
   };
@@ -322,7 +360,7 @@ export default function CoupleGallery() {
     setActivePhoto((current) =>
       current === null
         ? null
-        : (current + direction + photos.length) % photos.length,
+        : (current + direction + viewerPhotos.length) % viewerPhotos.length,
     );
   };
   const closeFilm = () => setActiveFilm(null);
@@ -336,11 +374,295 @@ export default function CoupleGallery() {
       body: JSON.stringify({ type: "play" }),
     }).catch(() => undefined);
   };
+  const lightbox = activePhoto !== null && viewerPhotos[activePhoto] && (
+    <div
+      className="dynamic-lightbox rzl"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${names} photo viewer`}
+      onClick={(event) => {
+        if ((event.nativeEvent as PointerEvent).pointerType === "touch" || window.matchMedia("(pointer: coarse)").matches) return;
+        setActivePhoto(null);
+      }}
+      onWheel={(event) => {
+        event.stopPropagation();
+        if (
+          wheelLocked.current ||
+          Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) < 18
+        )
+          return;
+        wheelLocked.current = true;
+        const delta =
+          Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? event.deltaX
+            : event.deltaY;
+        changePhoto(delta > 0 ? 1 : -1);
+        window.setTimeout(() => (wheelLocked.current = false), 420);
+      }}
+      onPointerDown={(event) => {
+        if (event.pointerType === "mouse") return;
+        if ((event.target as HTMLElement).closest("button, a")) return;
+        touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Capture is a nicety; gestures still work without it.
+        }
+        const g = gesture.current;
+        if (touchPoints.current.size === 2) {
+          const [first, second] = [...touchPoints.current.values()];
+          g.mode = "pinch";
+          g.multi = true;
+          g.startDistance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+          g.startMid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+          g.startZoom = zoom;
+          g.startPan = pan;
+          setSwipeOffset(0);
+          setGesturing(true);
+          setShowSwipeHint(false);
+          sessionStorage.setItem("rz-swipe-hint", "seen");
+        } else if (touchPoints.current.size === 1) {
+          g.mode = zoom > 1 ? "pan" : "swipe";
+          g.startX = event.clientX;
+          g.startY = event.clientY;
+          g.startTime = Date.now();
+          g.startPan = pan;
+          g.moved = false;
+          g.multi = false;
+        }
+      }}
+      onPointerMove={(event) => {
+        if (!touchPoints.current.has(event.pointerId)) return;
+        touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const g = gesture.current;
+        if (g.mode === "pinch" && touchPoints.current.size >= 2) {
+          const [first, second] = [...touchPoints.current.values()];
+          const distance = Math.hypot(second.x - first.x, second.y - first.y);
+          const mid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+          const next = Math.min(5, Math.max(1, (g.startZoom * distance) / g.startDistance));
+          const cx = g.startMid.x - window.innerWidth / 2;
+          const cy = g.startMid.y - window.innerHeight / 2;
+          const ratio = next / g.startZoom;
+          setZoom(next);
+          setPan(clampPan({
+            x: cx - (cx - g.startPan.x) * ratio + (mid.x - g.startMid.x),
+            y: cy - (cy - g.startPan.y) * ratio + (mid.y - g.startMid.y),
+          }, next));
+          return;
+        }
+        const dx = event.clientX - g.startX;
+        const dy = event.clientY - g.startY;
+        if (Math.hypot(dx, dy) > 8) g.moved = true;
+        if (g.mode === "pan") {
+          setGesturing(true);
+          setPan(clampPan({ x: g.startPan.x + dx, y: g.startPan.y + dy }, zoom));
+        } else if (g.mode === "swipe" && Math.abs(dx) > Math.abs(dy)) {
+          setSwipeOffset(dx);
+        }
+      }}
+      onPointerUp={(event) => {
+        if (!touchPoints.current.has(event.pointerId)) return;
+        touchPoints.current.delete(event.pointerId);
+        const g = gesture.current;
+        if (touchPoints.current.size > 0) {
+          // One finger lifted mid-pinch: continue as a pan with the remaining finger.
+          const [rest] = [...touchPoints.current.values()];
+          g.mode = zoom > 1 ? "pan" : "none";
+          g.startX = rest.x;
+          g.startY = rest.y;
+          g.startPan = pan;
+          return;
+        }
+        setGesturing(false);
+        const dx = event.clientX - g.startX;
+        const dy = event.clientY - g.startY;
+        const mode = g.mode;
+        g.mode = "none";
+        if (zoom < 1.05) resetZoom();
+        if (mode === "swipe") {
+          if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) {
+            changePhoto(dx < 0 ? 1 : -1);
+            return;
+          }
+          setSwipeOffset(0);
+        }
+        if (g.multi || g.moved || Date.now() - g.startTime > 300) return;
+        // Tap handling: double tap zooms at the finger, single tap on the backdrop closes.
+        const now = Date.now();
+        const previous = lastTap.current;
+        if (previous && now - previous.time < 300 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 40) {
+          if (tapTimer.current) window.clearTimeout(tapTimer.current);
+          lastTap.current = null;
+          if (zoom > 1) resetZoom();
+          else zoomAt(2.5, event.clientX, event.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
+          setShowSwipeHint(false);
+          sessionStorage.setItem("rz-swipe-hint", "seen");
+          return;
+        }
+        lastTap.current = { time: now, x: event.clientX, y: event.clientY };
+        const onImage = event.target === photoImage.current;
+        if (!onImage && zoom === 1) {
+          tapTimer.current = window.setTimeout(() => setActivePhoto(null), 300);
+        }
+      }}
+      onPointerCancel={() => {
+        touchPoints.current.clear();
+        gesture.current.mode = "none";
+        setGesturing(false);
+        setSwipeOffset(0);
+      }}
+    >
+      <button
+        className="dynamic-close"
+        onClick={() => setActivePhoto(null)}
+        aria-label="Close photo viewer"
+      >
+        <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </button>
+      <button
+        className="lightbox-arrow is-previous"
+        aria-label="Previous photo"
+        onClick={(e) => {
+          e.stopPropagation();
+          changePhoto(-1);
+        }}
+      >
+        <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </button>
+      <img
+        ref={photoImage}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (window.matchMedia("(pointer: coarse)").matches) return;
+          if (zoom > 1) resetZoom();
+          else zoomAt(2.5, e.clientX, e.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
+          setShowSwipeHint(false);
+          sessionStorage.setItem("rz-swipe-hint", "seen");
+        }}
+        src={viewerPhotos[activePhoto].url!}
+        alt={viewerPhotos[activePhoto].alt}
+        draggable={false}
+        style={{
+          transform: `translate3d(${pan.x + swipeOffset}px, ${pan.y}px, 0) scale(${zoom * (swipeOffset ? 0.985 : 1)})`,
+          opacity: swipeOffset ? Math.max(0.55, 1 - Math.abs(swipeOffset) / 500) : 1,
+          transition: swipeOffset || gesturing ? "none" : undefined,
+          cursor: zoom > 1 ? "grab" : "zoom-in",
+        }}
+      />
+      {showSwipeHint && (
+        <button
+          className="swipe-hint"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowSwipeHint(false);
+            sessionStorage.setItem("rz-swipe-hint", "seen");
+          }}
+        >
+          Swipe to explore · Pinch to zoom
+        </button>
+      )}
+      <div className="zoom-controls">
+        <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom - 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom out">−</button>
+        <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom + 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom in">＋</button>
+      </div>
+      {[1, -1].map((offset) => {
+        const preloadIndex =
+          (activePhoto + offset + viewerPhotos.length) % viewerPhotos.length;
+        return (
+          <link
+            key={offset}
+            rel="preload"
+            as="image"
+            href={viewerPhotos[preloadIndex].url!}
+          />
+        );
+      })}
+      <span className="lightbox-count">
+        {String(activePhoto + 1).padStart(2, "0")} /{" "}
+        {String(viewerPhotos.length).padStart(2, "0")}
+      </span>
+      <a
+        className="original-download rzl-download"
+        onClick={(event) => event.stopPropagation()}
+        href={`${API}/api/download?key=${encodeURIComponent(viewerPhotos[activePhoto].originalKey)}&name=${encodeURIComponent(viewerPhotos[activePhoto].filename)}`}
+      >
+        <FilmIcon name="cloud" /> Download original
+      </a>
+      <button
+        className="lightbox-arrow is-next"
+        aria-label="Next photo"
+        onClick={(e) => {
+          e.stopPropagation();
+          changePhoto(1);
+        }}
+      >
+        <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </button>
+    </div>
+  );
+  const openRawItem = (index: number) => {
+    const item = rawMedia[index];
+    if (!item) return;
+    if (item.type === "video") {
+      fullscreenRequested.current =
+        window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 760;
+      setActiveRawFilm(item);
+      void fetch(`${API}/api/analytics/${encodeURIComponent(gallery.slug)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "play" }),
+      }).catch(() => undefined);
+      return;
+    }
+    openPhoto(rawPhotos.indexOf(item));
+  };
+  if (view === "raw")
+    return (
+      <main className={`dynamic-photos is-raw${brandClass}`}>
+        {downloadToast}{omniFonts}
+        <DynamicHeader names={names} back={backHome} business={business} />
+        <section className="photo-utility-bar" aria-label="Raw materials actions">
+          <span><Icon name="raw" /> Raw materials</span>
+          <div className="photo-page-actions">
+            <a
+              className="page-download-all"
+              href={downloadUrl("raw")}
+              onClick={(event) => void startDownload(event, downloadUrl("raw"), mobileDownloadUrl("raw"))}
+            >
+              <Icon name="download" /> {downloadLabel("Download all raw")}
+            </a>
+          </div>
+        </section>
+        <JustifiedPhotoGrid
+          photos={rawMedia}
+          names={names}
+          openPhoto={openRawItem}
+          selectionMode={false}
+          selectedPhotos={[]}
+          togglePhoto={() => undefined}
+          savePhoto={savePhotoToDevice}
+        />
+        {lightbox}
+        {activeRawFilm?.playbackId && (
+          <FilmPlayer
+            key={activeRawFilm.id}
+            playbackId={activeRawFilm.playbackId}
+            title={activeRawFilm.title || activeRawFilm.filename || "Video"}
+            downloadUrl={`${API}/api/download?key=${encodeURIComponent(activeRawFilm.originalKey)}&name=${encodeURIComponent(activeRawFilm.filename)}`}
+            requestFullscreen={fullscreenRequested.current}
+            onClose={() => setActiveRawFilm(null)}
+            onEnded={() => setActiveRawFilm(null)}
+          />
+        )}
+        <MobileActionBar back={backHome} share={shareGallery} download={mobileDownloadUrl("raw")} />
+      </main>
+    );
   if (view === "photos")
     return (
-      <main className="dynamic-photos">
-        {downloadToast}
-        <DynamicHeader names={names} back={backHome} />
+      <main className={`dynamic-photos${brandClass}`}>
+        {downloadToast}{omniFonts}
+        <DynamicHeader names={names} back={backHome} business={business} />
         <section className="photo-utility-bar" aria-label="Photography actions">
           <span><Icon name="photo" /> Photography</span>
           <div className="photo-page-actions">
@@ -397,240 +719,14 @@ export default function CoupleGallery() {
             </a>
           </aside>
         )}
-        {activePhoto !== null && (
-          <div
-            className="dynamic-lightbox rzl"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${names} photo viewer`}
-            onClick={(event) => {
-              if ((event.nativeEvent as PointerEvent).pointerType === "touch" || window.matchMedia("(pointer: coarse)").matches) return;
-              setActivePhoto(null);
-            }}
-            onWheel={(event) => {
-              event.stopPropagation();
-              if (
-                wheelLocked.current ||
-                Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) < 18
-              )
-                return;
-              wheelLocked.current = true;
-              const delta =
-                Math.abs(event.deltaX) > Math.abs(event.deltaY)
-                  ? event.deltaX
-                  : event.deltaY;
-              changePhoto(delta > 0 ? 1 : -1);
-              window.setTimeout(() => (wheelLocked.current = false), 420);
-            }}
-            onPointerDown={(event) => {
-              if (event.pointerType === "mouse") return;
-              if ((event.target as HTMLElement).closest("button, a")) return;
-              touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-              try {
-                event.currentTarget.setPointerCapture(event.pointerId);
-              } catch {
-                // Capture is a nicety; gestures still work without it.
-              }
-              const g = gesture.current;
-              if (touchPoints.current.size === 2) {
-                const [first, second] = [...touchPoints.current.values()];
-                g.mode = "pinch";
-                g.multi = true;
-                g.startDistance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
-                g.startMid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-                g.startZoom = zoom;
-                g.startPan = pan;
-                setSwipeOffset(0);
-                setGesturing(true);
-                setShowSwipeHint(false);
-                sessionStorage.setItem("rz-swipe-hint", "seen");
-              } else if (touchPoints.current.size === 1) {
-                g.mode = zoom > 1 ? "pan" : "swipe";
-                g.startX = event.clientX;
-                g.startY = event.clientY;
-                g.startTime = Date.now();
-                g.startPan = pan;
-                g.moved = false;
-                g.multi = false;
-              }
-            }}
-            onPointerMove={(event) => {
-              if (!touchPoints.current.has(event.pointerId)) return;
-              touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-              const g = gesture.current;
-              if (g.mode === "pinch" && touchPoints.current.size >= 2) {
-                const [first, second] = [...touchPoints.current.values()];
-                const distance = Math.hypot(second.x - first.x, second.y - first.y);
-                const mid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-                const next = Math.min(5, Math.max(1, (g.startZoom * distance) / g.startDistance));
-                const cx = g.startMid.x - window.innerWidth / 2;
-                const cy = g.startMid.y - window.innerHeight / 2;
-                const ratio = next / g.startZoom;
-                setZoom(next);
-                setPan(clampPan({
-                  x: cx - (cx - g.startPan.x) * ratio + (mid.x - g.startMid.x),
-                  y: cy - (cy - g.startPan.y) * ratio + (mid.y - g.startMid.y),
-                }, next));
-                return;
-              }
-              const dx = event.clientX - g.startX;
-              const dy = event.clientY - g.startY;
-              if (Math.hypot(dx, dy) > 8) g.moved = true;
-              if (g.mode === "pan") {
-                setGesturing(true);
-                setPan(clampPan({ x: g.startPan.x + dx, y: g.startPan.y + dy }, zoom));
-              } else if (g.mode === "swipe" && Math.abs(dx) > Math.abs(dy)) {
-                setSwipeOffset(dx);
-              }
-            }}
-            onPointerUp={(event) => {
-              if (!touchPoints.current.has(event.pointerId)) return;
-              touchPoints.current.delete(event.pointerId);
-              const g = gesture.current;
-              if (touchPoints.current.size > 0) {
-                // One finger lifted mid-pinch: continue as a pan with the remaining finger.
-                const [rest] = [...touchPoints.current.values()];
-                g.mode = zoom > 1 ? "pan" : "none";
-                g.startX = rest.x;
-                g.startY = rest.y;
-                g.startPan = pan;
-                return;
-              }
-              setGesturing(false);
-              const dx = event.clientX - g.startX;
-              const dy = event.clientY - g.startY;
-              const mode = g.mode;
-              g.mode = "none";
-              if (zoom < 1.05) resetZoom();
-              if (mode === "swipe") {
-                if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) {
-                  changePhoto(dx < 0 ? 1 : -1);
-                  return;
-                }
-                setSwipeOffset(0);
-              }
-              if (g.multi || g.moved || Date.now() - g.startTime > 300) return;
-              // Tap handling: double tap zooms at the finger, single tap on the backdrop closes.
-              const now = Date.now();
-              const previous = lastTap.current;
-              if (previous && now - previous.time < 300 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 40) {
-                if (tapTimer.current) window.clearTimeout(tapTimer.current);
-                lastTap.current = null;
-                if (zoom > 1) resetZoom();
-                else zoomAt(2.5, event.clientX, event.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
-                setShowSwipeHint(false);
-                sessionStorage.setItem("rz-swipe-hint", "seen");
-                return;
-              }
-              lastTap.current = { time: now, x: event.clientX, y: event.clientY };
-              const onImage = event.target === photoImage.current;
-              if (!onImage && zoom === 1) {
-                tapTimer.current = window.setTimeout(() => setActivePhoto(null), 300);
-              }
-            }}
-            onPointerCancel={() => {
-              touchPoints.current.clear();
-              gesture.current.mode = "none";
-              setGesturing(false);
-              setSwipeOffset(0);
-            }}
-          >
-            <button
-              className="dynamic-close"
-              onClick={() => setActivePhoto(null)}
-              aria-label="Close photo viewer"
-            >
-              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <button
-              className="lightbox-arrow is-previous"
-              aria-label="Previous photo"
-              onClick={(e) => {
-                e.stopPropagation();
-                changePhoto(-1);
-              }}
-            >
-              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <img
-              ref={photoImage}
-              onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                if (window.matchMedia("(pointer: coarse)").matches) return;
-                if (zoom > 1) resetZoom();
-                else zoomAt(2.5, e.clientX, e.clientY, { zoom: 1, pan: { x: 0, y: 0 } });
-                setShowSwipeHint(false);
-                sessionStorage.setItem("rz-swipe-hint", "seen");
-              }}
-              src={photos[activePhoto].url!}
-              alt={photos[activePhoto].alt}
-              draggable={false}
-              style={{
-                transform: `translate3d(${pan.x + swipeOffset}px, ${pan.y}px, 0) scale(${zoom * (swipeOffset ? 0.985 : 1)})`,
-                opacity: swipeOffset ? Math.max(0.55, 1 - Math.abs(swipeOffset) / 500) : 1,
-                transition: swipeOffset || gesturing ? "none" : undefined,
-                cursor: zoom > 1 ? "grab" : "zoom-in",
-              }}
-            />
-            {showSwipeHint && (
-              <button
-                className="swipe-hint"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setShowSwipeHint(false);
-                  sessionStorage.setItem("rz-swipe-hint", "seen");
-                }}
-              >
-                Swipe to explore · Pinch to zoom
-              </button>
-            )}
-            <div className="zoom-controls">
-              <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom - 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom out">−</button>
-              <button onClick={(event) => { event.stopPropagation(); zoomAt(zoom + 0.5, window.innerWidth / 2, window.innerHeight / 2); }} aria-label="Zoom in">＋</button>
-            </div>
-            {[1, -1].map((offset) => {
-              const preloadIndex =
-                (activePhoto + offset + photos.length) % photos.length;
-              return (
-                <link
-                  key={offset}
-                  rel="preload"
-                  as="image"
-                  href={photos[preloadIndex].url!}
-                />
-              );
-            })}
-            <span className="lightbox-count">
-              {String(activePhoto + 1).padStart(2, "0")} /{" "}
-              {String(photos.length).padStart(2, "0")}
-            </span>
-            <a
-              className="original-download rzl-download"
-              onClick={(event) => event.stopPropagation()}
-              href={`${API}/api/download?key=${encodeURIComponent(photos[activePhoto].originalKey)}&name=${encodeURIComponent(photos[activePhoto].filename)}`}
-            >
-              <FilmIcon name="cloud" /> Download original
-            </a>
-            <button
-              className="lightbox-arrow is-next"
-              aria-label="Next photo"
-              onClick={(e) => {
-                e.stopPropagation();
-                changePhoto(1);
-              }}
-            >
-              <svg className="rzl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-          </div>
-        )}
+        {lightbox}
         <MobileActionBar back={backHome} share={shareGallery} download={mobileDownloadUrl("photos")} />
       </main>
     );
   if (view === "films")
     return (
-      <main className="rzf">
-        {downloadToast}
+      <main className={`rzf${brandClass}`}>
+        {downloadToast}{omniFonts}
         {featuredFilm?.playbackId && (
           <MuxPlayer
             className="rzf-background"
@@ -652,8 +748,14 @@ export default function CoupleGallery() {
         <div className="rzf-shade" />
         <header className="rzf-header">
           <button className="rzf-brand" onClick={backHome} aria-label="Back to gallery">
-            <span className="rzf-seal">RZ</span>
-            <span className="rzf-brand-name">RZ.SOCIAL.MEDIA</span>
+            {business ? (
+              <OmniMark tone="ivory" className="rzf-omni" />
+            ) : (
+              <>
+                <span className="rzf-seal">RZ</span>
+                <span className="rzf-brand-name">RZ.SOCIAL.MEDIA</span>
+              </>
+            )}
           </button>
           <div className="rzf-actions">
             <a
@@ -694,7 +796,7 @@ export default function CoupleGallery() {
                   <span className="rzf-card-shade" />
                   <span className="rzf-card-play"><FilmIcon name="play" /></span>
                   <span className="rzf-card-copy">
-                    <strong>{film.title || "Wedding film"}</strong>
+                    <strong>{film.title || (business ? "Film" : "Wedding film")}</strong>
                     <small><FilmIcon name="play" /> PLAY FILM</small>
                   </span>
                 </button>
@@ -715,7 +817,7 @@ export default function CoupleGallery() {
           <FilmPlayer
             key={films[activeFilm].id}
             playbackId={films[activeFilm].playbackId!}
-            title={films[activeFilm].title || "Wedding film"}
+            title={films[activeFilm].title || (business ? "Film" : "Wedding film")}
             downloadUrl={`${API}/api/download?key=${encodeURIComponent(films[activeFilm].originalKey)}&name=${encodeURIComponent(films[activeFilm].filename)}`}
             requestFullscreen={fullscreenRequested.current}
             onClose={closeFilm}
@@ -730,15 +832,19 @@ export default function CoupleGallery() {
       </main>
     );
   return (
-    <main className="dynamic-home">
-        {downloadToast}
+    <main className={`dynamic-home${brandClass}`}>
+        {downloadToast}{omniFonts}
       <div
         className="dynamic-cover"
         style={coverStyle}
       />
       <div className="dynamic-shade" />
       <header>
-        <div><span className="brand-seal">RZ</span><span>Private wedding gallery</span></div>
+        {business ? (
+          <div><OmniMark tone="ivory" /><span>Private gallery</span></div>
+        ) : (
+          <div><span className="brand-seal">RZ</span><span>Private wedding gallery</span></div>
+        )}
         <a
           className="home-top-download"
           href={downloadUrl("all")}
@@ -748,12 +854,21 @@ export default function CoupleGallery() {
         </a>
       </header>
       <section>
-        <small>Welcome to the wedding of</small>
-        <h1>
-          {gallery.partnerOne}
-          <em>&</em>
-          {gallery.partnerTwo}
-        </h1>
+        {business ? (
+          <>
+            <small>Welcome to</small>
+            <h1>{gallery.title}</h1>
+          </>
+        ) : (
+          <>
+            <small>Welcome to the wedding of</small>
+            <h1>
+              {gallery.partnerOne}
+              <em>&</em>
+              {gallery.partnerTwo}
+            </h1>
+          </>
+        )}
         <p>{gallery.note}</p>
         <p className="gallery-meta">{[gallery.weddingDate, gallery.location].filter(Boolean).join(" · ")}</p>
         <div>
@@ -763,6 +878,11 @@ export default function CoupleGallery() {
           <button disabled={!films.length} onClick={() => openView("films")}>
             <Icon name="film" /> <span>Films<small>{films.length} films</small></span>
           </button>
+          {rawMedia.length > 0 && (
+            <button onClick={() => openView("raw")}>
+              <Icon name="raw" /> <span>Raw materials<small>{rawMedia.length} files</small></span>
+            </button>
+          )}
         </div>
       </section>
       <button className="home-share" onClick={() => void shareGallery()}><Icon name="share" /> Share</button>
@@ -819,7 +939,11 @@ function JustifiedPhotoGrid({
             >
               <button onClick={() => selectionMode ? togglePhoto(photo.id) : openPhoto(index)}>
                 <img
-                  src={photo.url!}
+                  src={
+                    photo.type === "video"
+                      ? photo.posterUrl || `https://image.mux.com/${photo.playbackId}/thumbnail.webp?time=0&width=900`
+                      : photo.url!
+                  }
                   alt={photo.alt || `${names} photograph ${index + 1}`}
                   onLoad={(event) => {
                     const image = event.currentTarget;
@@ -832,6 +956,7 @@ function JustifiedPhotoGrid({
                     );
                   }}
                 />
+                {photo.type === "video" && <b className="grid-video-badge" aria-hidden="true"><Icon name="play" /></b>}
               </button>
               {selectionMode && <b className="selection-check">{selectedPhotos.includes(photo.id) ? "✓" : ""}</b>}
               <span>{String(index + 1).padStart(2, "0")}</span>
@@ -865,7 +990,7 @@ function MobileActionBar({ back, share, download }: { back: () => void; share: (
     </nav>
   );
 }
-function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back" | "select" | "play" }) {
+function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back" | "select" | "play" | "raw" }) {
   const paths = {
     photo: <><rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="2"/><path d="m3 17 5-4 3 2 4-4 6 6"/></>,
     film: <><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M8 5v14M16 5v14M3 10h5M16 10h5M3 15h5M16 15h5"/></>,
@@ -874,6 +999,7 @@ function Icon({ name }: { name: "photo" | "film" | "download" | "share" | "back"
     back: <path d="m15 18-6-6 6-6"/>,
     select: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></>,
     play: <path d="m9 7 8 5-8 5Z" fill="currentColor" stroke="none"/>,
+    raw: <><rect x="3" y="7" width="13" height="13" rx="1"/><path d="M7 4h13v13"/><path d="m3 17 4-3 3 2 3-3 3 3"/></>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -889,13 +1015,13 @@ function FilmIcon({ name }: { name: "cloud" | "share" | "playCircle" | "play" | 
   };
   return <svg className="rzf-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} fill="currentColor"/></svg>;
 }
-function DynamicHeader({ names, back, action }: { names: string; back: () => void; action?: ReactNode }) {
+function DynamicHeader({ names, back, action, business = false }: { names: string; back: () => void; action?: ReactNode; business?: boolean }) {
   return (
     <header className="dynamic-topbar">
       <button onClick={back}>
-        <span className="brand-seal">RZ</span>
+        {business ? <OmniMark /> : <span className="brand-seal">RZ</span>}
         <span>
-          <strong>RZ Weddings</strong>
+          <strong>{business ? "OMNI" : "RZ Weddings"}</strong>
           <small>{names}</small>
         </span>
       </button>
