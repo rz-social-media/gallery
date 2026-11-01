@@ -4349,7 +4349,10 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
 /* Films */
 .rzf.is-omni .rzf-omni { height: max(26px, 2vw); }
 .rzf.is-omni .rzf-copy h1 { font-weight: 300; letter-spacing: -.01em; }
-.rzf.is-omni .rzf-play-all { letter-spacing: .2em; }
+.rzf.is-omni .rzf-play-all { width: auto; min-width: 0; padding: 0 1.6em 0 .45em; gap: .75em; white-space: nowrap; background: rgba(255, 251, 235, .94); color: #000249; font-weight: 500; letter-spacing: .16em; box-shadow: 0 10px 30px rgba(0, 2, 45, .25); }
+.rzf.is-omni .rzf-play-all:hover { background: #fff; }
+.rzf.is-omni .rzf-play-all .rzf-icon circle { fill: #000249; }
+.rzf.is-omni .rzf-play-all .rzf-icon path { fill: #fffbeb; }
 .rzf.is-omni .rzf-card-copy strong { font-weight: 400; }
 @media (max-width: 700px) {
   .dynamic-home.is-omni header .omni-mark { height: 22px; }
