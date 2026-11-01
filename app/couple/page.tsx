@@ -1019,7 +1019,7 @@ function DynamicHeader({ names, back, action, business = false }: { names: strin
   return (
     <header className="dynamic-topbar">
       <button onClick={back}>
-        {business ? <OmniMark /> : <span className="brand-seal">RZ</span>}
+        {business ? <OmniMark tone="ivory" /> : <span className="brand-seal">RZ</span>}
         <span>
           <strong>{business ? "OMNI" : "RZ Weddings"}</strong>
           <small>{names}</small>

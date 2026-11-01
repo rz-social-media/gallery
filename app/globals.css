@@ -4317,29 +4317,31 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
 }
 
 /* Photography / Raw materials */
-.dynamic-photos.is-omni { background: #000249; }
+.dynamic-photos.is-omni { background: #fffbeb; }
 .dynamic-photos.is-omni .dynamic-topbar,
-.dynamic-photos.is-omni .photo-utility-bar { background: #fffbeb; color: #000249; }
-.dynamic-photos.is-omni .dynamic-topbar { border-bottom-color: rgba(0, 2, 73, .1); }
+.dynamic-photos.is-omni .photo-utility-bar { background: #000249; color: #fffbeb; }
+.dynamic-photos.is-omni .dynamic-topbar { border-bottom-color: rgba(255, 251, 235, .12); }
+.dynamic-photos.is-omni .dynamic-topbar :is(button, strong) { color: #fffbeb; }
 .dynamic-photos.is-omni .dynamic-topbar strong { letter-spacing: .24em; font-weight: 500; }
 .dynamic-photos.is-omni .dynamic-topbar small,
-.dynamic-photos.is-omni .photo-utility-bar > span { color: #5b5959; }
+.dynamic-photos.is-omni .photo-utility-bar > span { color: rgba(255, 251, 235, .7); }
 .dynamic-photos.is-omni .photo-utility-bar > span { letter-spacing: .04em; }
 .dynamic-photos.is-omni .photo-page-actions > button,
 .dynamic-photos.is-omni .photo-page-actions > a {
-  color: #000249;
-  border-color: rgba(0, 2, 73, .28);
+  background: transparent;
+  color: #fffbeb;
+  border-color: rgba(255, 251, 235, .38);
   border-radius: 999px;
   letter-spacing: .08em;
 }
 .dynamic-photos.is-omni .photo-page-actions > button:hover,
 .dynamic-photos.is-omni .photo-page-actions > a:hover,
 .dynamic-photos.is-omni .photo-page-actions > .is-active {
-  background: #000249;
-  border-color: #000249;
-  color: #fffbeb;
+  background: #fffbeb;
+  border-color: #fffbeb;
+  color: #000249;
 }
-.dynamic-photos.is-omni .public-photo-tile { background: rgba(255, 251, 235, .06); }
+.dynamic-photos.is-omni .public-photo-tile { background: rgba(0, 2, 73, .06); }
 .dynamic-photos.is-omni .selection-tray { background: #000249; color: #fffbeb; }
 .dynamic-photos.is-omni .mobile-action-bar,
 .rzf.is-omni .mobile-action-bar { background: rgba(255, 251, 235, .96); color: #000249; }
@@ -4373,3 +4375,5 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
       linear-gradient(0deg, rgba(4, 4, 30, .78), rgba(0, 2, 45, .32) 50%, rgba(0, 2, 45, .12));
   }
 }
+.dynamic-photos.is-omni .mobile-action-bar { background: rgba(0, 2, 73, .96); color: #fffbeb; }
+.dynamic-photos.is-omni .mobile-action-bar :is(button, a) { color: #fffbeb; }
