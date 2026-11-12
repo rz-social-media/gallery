@@ -146,6 +146,7 @@ export default function Manager() {
       sessionStorage.setItem("rz-admin-code", value);
       setRows(list);
       void loadAnalytics(list, value);
+      void backfillShareImages(list, value);
       setReady(true);
     } catch (e) {
       setNotice((e as Error).message);
@@ -156,6 +157,56 @@ export default function Manager() {
     const list = await call("/api/galleries");
     setRows(list);
     void loadAnalytics(list);
+    void backfillShareImages(list);
+  }
+  // Galleries not opened since the preview format changed still lack a 4:3
+  // preview image; make them here so every WhatsApp link looks right.
+  const backfilling = useRef(false),
+    editing = useRef(false);
+  editing.current = Boolean(active);
+  async function backfillShareImages(list: Gallery[], value = code) {
+    if (backfilling.current) return;
+    backfilling.current = true;
+    try {
+      for (const gallery of list) {
+        const spec = shareSpec(gallery);
+        if (!gallery.slug || !spec.cover || gallery.shareImageFor === spec.key) continue;
+        if (editing.current) return; // the editor makes its own, and owns the gallery while open
+        try {
+          const image = await renderShareImage(spec.cover, spec.position, spec.zoom),
+            sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await image.arrayBuffer())))
+              .map((byte) => byte.toString(16).padStart(2, "0"))
+              .join("");
+          const upload = await call(
+            "/api/uploads",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ coupleSlug: gallery.slug, filename: "share-preview.jpg", contentType: "image/jpeg", kind: "photo-web", sha256 }),
+            },
+            value,
+          );
+          if (!upload.exists) {
+            const put = await fetch(upload.uploadUrl, { method: "PUT", headers: { "Content-Type": upload.contentType }, body: image });
+            if (!put.ok) continue;
+          }
+          if (editing.current) return;
+          await call(
+            `/api/galleries/${gallery.slug}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...gallery, shareImageUrl: `${API}/media/${upload.key}`, shareImageFor: spec.key }),
+            },
+            value,
+          );
+        } catch {
+          // Skip this one; it is retried the next time the dashboard loads.
+        }
+      }
+    } finally {
+      backfilling.current = false;
+    }
   }
   async function loadAnalytics(galleries: Gallery[], value = code) {
     const entries = await Promise.all(
@@ -631,7 +682,9 @@ function Editor({
   const patchQueue = (id: string, patch: Partial<QueueItem>) =>
     setQueue((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   const galleryRef = useRef(gallery);
-  const lastAutosaved = useRef(JSON.stringify(gallery));
+  const lastAutosaved = useRef(JSON.stringify(gallery)),
+    // The first save fixes the gallery's link, so wait until the name fields are left.
+    [editingName, setEditingName] = useState(false);
   const automaticPublishStarted = useRef(false);
   useEffect(() => {
     galleryRef.current = gallery;
@@ -836,7 +889,7 @@ function Editor({
   }, [missingChecksums, gallery.slug, uploading]);
   useEffect(() => {
     const slug = gallerySlug(gallery);
-    if (!slug || !hasName(gallery)) return;
+    if (!slug || !hasName(gallery) || (!gallery.slug && editingName)) return;
     const candidate = { ...gallery, slug };
     const serialized = JSON.stringify(candidate);
     if (serialized === lastAutosaved.current) return;
@@ -853,7 +906,7 @@ function Editor({
       }
     }, 850);
     return () => window.clearTimeout(timer);
-  }, [gallery]);
+  }, [gallery, editingName]);
   async function openPreview() {
     const slug = gallerySlug(gallery);
     if (!slug) return alert(isBusiness(gallery) ? "Add the gallery name first" : "Add both names first");
@@ -1015,20 +1068,7 @@ function Editor({
   const automaticCover = coverCandidates[0]?.url;
   // Link previews (WhatsApp etc.) get a landscape crop of the cover. Same
   // cover choice as the media API's galleryCover().
-  const shareCover =
-    gallery.computerCoverUrl ||
-    gallery.phoneCoverUrl ||
-    gallery.media.find((item) => item.type === "photo" && item.url)?.url ||
-    gallery.media.find((item) => item.type === "video" && item.posterUrl)?.posterUrl ||
-    "";
-  // The preview is cropped like the cover the client sees for it.
-  const [sharePosition, shareZoom] =
-    shareCover === gallery.computerCoverUrl
-      ? [gallery.computerCoverPosition, gallery.computerCoverZoom]
-      : shareCover === gallery.phoneCoverUrl
-        ? [gallery.phoneCoverPosition, gallery.phoneCoverZoom]
-        : [undefined, undefined];
-  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|4`;
+  const { cover: shareCover, position: sharePosition, zoom: shareZoom, key: shareKey } = shareSpec(gallery);
   useEffect(() => {
     if (!gallery.slug || !shareCover || gallery.shareImageFor === shareKey || uploading) return;
     const timer = window.setTimeout(async () => {
@@ -1421,6 +1461,8 @@ function Editor({
                 <input
                   value={gallery.title || ""}
                   onChange={(e) => set("title", e.target.value)}
+                    onFocus={() => setEditingName(true)}
+                    onBlur={() => setEditingName(false)}
                 />
               </label>
             ) : (
@@ -1430,6 +1472,8 @@ function Editor({
                   <input
                     value={gallery.partnerOne}
                     onChange={(e) => set("partnerOne", e.target.value)}
+                    onFocus={() => setEditingName(true)}
+                    onBlur={() => setEditingName(false)}
                   />
                 </label>
                 <label>
@@ -1437,6 +1481,8 @@ function Editor({
                   <input
                     value={gallery.partnerTwo}
                     onChange={(e) => set("partnerTwo", e.target.value)}
+                    onFocus={() => setEditingName(true)}
+                    onBlur={() => setEditingName(false)}
                   />
                 </label>
               </>
@@ -2025,6 +2071,30 @@ function Editor({
       </section>
     </main>
   );
+}
+
+// Link previews (WhatsApp etc.) get a 4:3 landscape crop of the cover. Same
+// cover choice as the media API's galleryCover(); cropped like the client sees
+// it. `key` records what the stored image was made from ("|4" = this format).
+function shareSpec(gallery: Gallery) {
+  const cover =
+    gallery.computerCoverUrl ||
+    gallery.phoneCoverUrl ||
+    gallery.media.find((item) => item.type === "photo" && item.url)?.url ||
+    gallery.media.find((item) => item.type === "video" && item.posterUrl)?.posterUrl ||
+    "";
+  const [position, zoom] =
+    cover === gallery.computerCoverUrl
+      ? [gallery.computerCoverPosition, gallery.computerCoverZoom]
+      : cover === gallery.phoneCoverUrl
+        ? [gallery.phoneCoverPosition, gallery.phoneCoverZoom]
+        : [undefined, undefined];
+  return {
+    cover,
+    position,
+    zoom,
+    key: `${cover}|${isBusiness(gallery) ? "omni" : "rz"}|${position || "50% 50%"}|${zoom || 1}|4`,
+  };
 }
 
 // Same crop everywhere a framed cover is shown: object-position picks the spot,
