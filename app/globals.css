@@ -1345,7 +1345,7 @@ body:has(.dynamic-photos) {
 .dynamic-cover {
   background-image: var(--gallery-cover-computer);
   background-size: cover;
-  background-position: center;
+  background-position: var(--gallery-cover-computer-position, center);
   transform: scale(1.01);
 }
 .dynamic-shade {
@@ -1839,7 +1839,7 @@ body:has(.dynamic-photos) {
   position: absolute;
   inset: 0;
   background-image: var(--gallery-cover-computer);
-  background-position: center;
+  background-position: var(--gallery-cover-computer-position, center);
   background-size: cover;
 }
 .dynamic-films .dynamic-topbar {
@@ -1940,6 +1940,7 @@ body:has(.dynamic-photos) {
   .dynamic-cover,
   .dynamic-film-cover {
     background-image: var(--gallery-cover-phone);
+    background-position: var(--gallery-cover-phone-position, center);
   }
   .dynamic-photo-grid {
     padding-left: 0.5rem;
@@ -4492,3 +4493,8 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
 @media (max-width: 700px) {
   .gm-picked-bar span { display: none; }
 }
+
+/* ===== Manager: gallery cover positioning ===== */
+.gallery-cover-buttons { display: flex; flex-wrap: wrap; gap: .6rem; }
+.cover-framer.is-tall { width: min(300px, 70%); margin-left: auto; margin-right: auto; }
+.cover-picker > section.cover-framing { max-height: calc(100svh - 2rem); overflow-y: auto; }

@@ -41,6 +41,8 @@ type Gallery = {
   note: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
+  computerCoverPosition?: string;
+  phoneCoverPosition?: string;
   featuredVideoId?: string;
   media: Media[];
 };
@@ -211,6 +213,10 @@ export default function CoupleGallery() {
       ? `url("${computerCover}")`
       : "none",
     "--gallery-cover-phone": phoneCover ? `url("${phoneCover}")` : "none",
+    "--gallery-cover-computer-position":
+      (gallery.computerCoverUrl || !gallery.phoneCoverUrl ? gallery.computerCoverPosition : undefined) || "center",
+    "--gallery-cover-phone-position":
+      (gallery.phoneCoverUrl || !gallery.computerCoverUrl ? gallery.phoneCoverPosition : undefined) || "center",
   } as CSSProperties;
   const sharedIdsSuffix = sharedPhotoIds.length
     ? `&ids=${encodeURIComponent(sharedPhotoIds.join(","))}`

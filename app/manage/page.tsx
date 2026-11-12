@@ -49,6 +49,10 @@ type Gallery = {
   deletedAt?: string;
   computerCoverUrl?: string;
   phoneCoverUrl?: string;
+  computerCoverPosition?: string;
+  phoneCoverPosition?: string;
+  shareImageUrl?: string;
+  shareImageFor?: string;
   featuredVideoId?: string;
   media: Media[];
 };
@@ -598,6 +602,7 @@ function Editor({
     [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null),
     [coverFor, setCoverFor] = useState<string | null>(null),
     [coverDraft, setCoverDraft] = useState<{ url: string; position: string } | null>(null),
+    [galleryFraming, setGalleryFraming] = useState<{ field: "computerCoverUrl" | "phoneCoverUrl"; url: string; saveUrl?: string; position: string } | null>(null),
     [galleryCoverFor, setGalleryCoverFor] = useState<
       "computerCoverUrl" | "phoneCoverUrl" | null
     >(null),
@@ -983,8 +988,11 @@ function Editor({
   function selectGalleryCover(
     field: "computerCoverUrl" | "phoneCoverUrl",
     coverUrl?: string,
+    position?: string,
   ) {
-    const updated = { ...galleryRef.current, [field]: coverUrl };
+    const positionField = field === "phoneCoverUrl" ? "phoneCoverPosition" : "computerCoverPosition";
+    const updated = { ...galleryRef.current, [field]: coverUrl, [positionField]: position };
+    setGalleryFraming(null);
     galleryRef.current = updated;
     change(updated);
     setGalleryCoverFor(null);
@@ -997,6 +1005,31 @@ function Editor({
       : [];
   });
   const automaticCover = coverCandidates[0]?.url;
+  // Link previews (WhatsApp etc.) show one image, so the logo is drawn onto a
+  // copy of the cover. Same cover choice as the media API's galleryCover().
+  const shareCover =
+    gallery.computerCoverUrl ||
+    gallery.phoneCoverUrl ||
+    gallery.media.find((item) => item.type === "photo" && item.url)?.url ||
+    gallery.media.find((item) => item.type === "video" && item.posterUrl)?.posterUrl ||
+    "";
+  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|1`;
+  useEffect(() => {
+    if (!gallery.slug || !shareCover || gallery.shareImageFor === shareKey || uploading) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const image = await renderShareImage(shareCover, business),
+          key = await signed(image, "share-preview.jpg", "photo-web", gallery.slug, await fingerprint(image));
+        const updated = { ...galleryRef.current, shareImageUrl: `${API}/media/${key}`, shareImageFor: shareKey };
+        galleryRef.current = updated;
+        change(updated);
+        await persist(updated);
+      } catch {
+        // The preview then falls back to the plain cover; nothing else depends on it.
+      }
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [shareKey, gallery.slug, gallery.shareImageFor, uploading]);
   async function deleteGallery() {
     if (!gallery.slug) return;
     const names = galleryName(gallery) || gallery.slug;
@@ -1639,9 +1672,19 @@ function Editor({
                   >
                     {gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video" && !item.raw)[0]?.id === v.id) ? "Background film ✓" : "Set as background"}
                   </button>
+                  {v.posterUrl && (
+                    <button
+                      onClick={() => {
+                        setCoverDraft({ url: v.posterUrl!, position: v.posterPosition || "50% 50%" });
+                        setCoverFor(v.id);
+                      }}
+                    >
+                      Adjust position
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      setCoverDraft(v.posterUrl ? { url: v.posterUrl, position: v.posterPosition || "50% 50%" } : null);
+                      setCoverDraft(null);
                       setCoverFor(v.id);
                     }}
                   >
@@ -1767,19 +1810,26 @@ function Editor({
                 ["phoneCoverUrl", "Phone cover"],
               ] as const
             ).map(([field, label]) => {
-              const selected = gallery[field];
+              const selected = gallery[field],
+                position = field === "phoneCoverUrl" ? gallery.phoneCoverPosition : gallery.computerCoverPosition,
+                shown = selected || automaticCover;
               return (
                 <section key={field}>
                   <div className={field === "phoneCoverUrl" ? "is-phone" : ""}>
-                    {(selected || automaticCover) && (
-                      <img src={selected || automaticCover} alt="" />
-                    )}
+                    {shown && <img src={shown} alt="" style={{ objectPosition: position }} />}
                     <span>{selected ? "Selected" : "Automatic default"}</span>
                   </div>
                   <h3>{label}</h3>
-                  <button onClick={() => setGalleryCoverFor(field)}>
-                    {selected ? "Change cover" : "Choose cover"}
-                  </button>
+                  <div className="gallery-cover-buttons">
+                    <button onClick={() => setGalleryCoverFor(field)}>
+                      {selected ? "Change cover" : "Choose cover"}
+                    </button>
+                    {shown && (
+                      <button onClick={() => setGalleryFraming({ field, url: shown, saveUrl: selected, position: position || "50% 50%" })}>
+                        Adjust position
+                      </button>
+                    )}
+                  </div>
                 </section>
               );
             })}
@@ -1799,6 +1849,7 @@ function Editor({
               <CoverFramer
                 url={coverDraft.url}
                 position={coverDraft.position}
+                hint="Drag the photo to position it · The frame matches the film card your client sees"
                 onChange={(position) => setCoverDraft({ ...coverDraft, position })}
               />
               <div className="cover-framing-actions">
@@ -1848,6 +1899,43 @@ function Editor({
             </section>
           </div>
         )}
+        {galleryFraming && (
+          <div className="cover-picker" onClick={() => setGalleryFraming(null)}>
+            <section className="cover-framing" onClick={(event) => event.stopPropagation()}>
+              <div>
+                <div>
+                  <small>Gallery cover</small>
+                  <h2>Position the {galleryFraming.field === "phoneCoverUrl" ? "phone" : "computer"} cover</h2>
+                </div>
+                <button aria-label="Close" onClick={() => setGalleryFraming(null)}><GmIcon name="close" /></button>
+              </div>
+              <CoverFramer
+                url={galleryFraming.url}
+                position={galleryFraming.position}
+                aspect={galleryFraming.field === "phoneCoverUrl" ? 9 / 19.5 : 16 / 9}
+                hint={`Drag the photo to position it · The frame matches a ${galleryFraming.field === "phoneCoverUrl" ? "phone" : "computer"} screen`}
+                onChange={(position) => setGalleryFraming({ ...galleryFraming, position })}
+              />
+              <div className="cover-framing-actions">
+                <button
+                  onClick={() => {
+                    setGalleryCoverFor(galleryFraming.field);
+                    setGalleryFraming(null);
+                  }}
+                >
+                  Choose another photo
+                </button>
+                <button onClick={() => setGalleryFraming({ ...galleryFraming, position: "50% 50%" })}>Center</button>
+                <button
+                  className="is-primary"
+                  onClick={() => selectGalleryCover(galleryFraming.field, galleryFraming.saveUrl, galleryFraming.position)}
+                >
+                  Save cover
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
         {galleryCoverFor && (
           <div
             className="cover-picker"
@@ -1867,9 +1955,10 @@ function Editor({
                 {coverCandidates.map((candidate) => (
                   <button
                     key={candidate.id}
-                    onClick={() =>
-                      selectGalleryCover(galleryCoverFor, candidate.url)
-                    }
+                    onClick={() => {
+                      setGalleryFraming({ field: galleryCoverFor, url: candidate.url!, saveUrl: candidate.url, position: "50% 50%" });
+                      setGalleryCoverFor(null);
+                    }}
                   >
                     <img src={candidate.url} alt={candidate.alt} />
                   </button>
@@ -1920,8 +2009,9 @@ function Editor({
   );
 }
 
-// The client's film cards are 1.626:1; drag the photo to choose what stays in frame.
-function CoverFramer({ url, position, onChange }: { url: string; position: string; onChange: (position: string) => void }) {
+// Drag the photo to choose what stays in frame. `aspect` is the shape the
+// client sees: film cards are 1.626:1, gallery covers fill a computer or phone screen.
+function CoverFramer({ url, position, aspect = 1.626, hint, onChange }: { url: string; position: string; aspect?: number; hint: string; onChange: (position: string) => void }) {
   const frame = useRef<HTMLDivElement | null>(null),
     [natural, setNatural] = useState<{ width: number; height: number } | null>(null),
     [dragging, setDragging] = useState(false),
@@ -1951,7 +2041,12 @@ function CoverFramer({ url, position, onChange }: { url: string; position: strin
   }
   return (
     <>
-      <div className={`cover-framer ${dragging ? "is-dragging" : ""}`} ref={frame} onPointerDown={onPointerDown}>
+      <div
+        className={`cover-framer ${dragging ? "is-dragging" : ""} ${aspect < 1 ? "is-tall" : ""}`}
+        ref={frame}
+        style={{ aspectRatio: String(aspect) }}
+        onPointerDown={onPointerDown}
+      >
         <img
           src={url}
           alt=""
@@ -1961,8 +2056,61 @@ function CoverFramer({ url, position, onChange }: { url: string; position: strin
         />
         <span className="cover-framer-grid" aria-hidden="true" />
       </div>
-      <p className="cover-framer-hint">Drag the photo to position it · The frame matches the film card your client sees</p>
+      <p className="cover-framer-hint">{hint}</p>
     </>
+  );
+}
+
+// Cover + brand mark for link previews. RZ: the ivory seal used on the site;
+// OMNI: the ivory symbol. Top-left, like the gallery header.
+async function renderShareImage(coverUrl: string, business: boolean) {
+  const load = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Image failed to load"));
+      image.src = src;
+    });
+  const cover = await load(coverUrl),
+    scale = Math.min(1, 1600 / Math.max(cover.naturalWidth, cover.naturalHeight)),
+    canvas = document.createElement("canvas");
+  canvas.width = Math.round(cover.naturalWidth * scale);
+  canvas.height = Math.round(cover.naturalHeight * scale);
+  const context = canvas.getContext("2d")!,
+    unit = Math.min(canvas.width, canvas.height),
+    margin = unit * 0.06;
+  context.drawImage(cover, 0, 0, canvas.width, canvas.height);
+  const glow = context.createRadialGradient(0, 0, 0, 0, 0, unit * 0.55);
+  glow.addColorStop(0, "rgba(0, 0, 0, .38)");
+  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (business) {
+    const mark = await load(`${BASE}/brand/omni-symbol-ivory.png`),
+      width = unit * 0.24;
+    context.drawImage(mark, margin, margin, width, (width * mark.naturalHeight) / mark.naturalWidth);
+  } else {
+    const radius = unit * 0.075,
+      x = margin + radius,
+      y = margin + radius;
+    await document.fonts.load(`400 ${Math.round(radius * 0.72)}px "Playfair Display"`).catch(() => undefined);
+    context.beginPath();
+    context.arc(x, y, radius + unit * 0.012, 0, Math.PI * 2);
+    context.fillStyle = "rgba(255, 255, 255, .3)";
+    context.fill();
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fillStyle = "#fffdf8";
+    context.fill();
+    context.fillStyle = "#2a211b";
+    context.font = `400 ${Math.round(radius * 0.72)}px "Playfair Display", Georgia, serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("RZ", x, y + radius * 0.04);
+  }
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Preview image failed"))), "image/jpeg", 0.88),
   );
 }
 

@@ -142,7 +142,7 @@ function galleryReferences(
   const sourceWithReferencedAsset = new Set<string>();
   for (const { value: gallery } of galleries) {
     const slug = safeSlug(String(gallery.slug || ""));
-    for (const field of ["computerCoverUrl", "phoneCoverUrl"]) {
+    for (const field of ["computerCoverUrl", "phoneCoverUrl", "shareImageUrl"]) {
       const value = gallery[field];
       if (typeof value !== "string") continue;
       try {
@@ -389,7 +389,13 @@ function sharePage(gallery: Record<string, any>, slug: string) {
   const destination = publicGalleryUrl(slug, gallery);
   const site = isBusiness(gallery) ? "OMNI" : "RZ Weddings";
   const imageAlt = isBusiness(gallery) ? `${names} gallery` : `${names} wedding gallery`;
-  const cover = galleryCover(gallery);
+  // The manager stores a copy of the cover with the logo; use it only while it
+  // still matches the current cover.
+  const plainCover = galleryCover(gallery);
+  const cover =
+    typeof gallery.shareImageUrl === "string" && String(gallery.shareImageFor || "").startsWith(`${plainCover}|`)
+      ? gallery.shareImageUrl
+      : plainCover;
   return new Response(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(description)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
     {
