@@ -61,6 +61,18 @@ const inSelection = (item: Record<string, any>, selection: Selection) =>
   (selection === "photos" && item.type === "photo" && !item.raw) ||
   (selection === "videos" && item.type === "video" && !item.raw);
 
+// Storage folders of a gallery: couples/<slug>/ plus those of its earlier links
+// (renaming a gallery never moves its files).
+function storageSlugs(gallery: Record<string, any>, slug: string) {
+  const former = Array.isArray(gallery.formerSlugs) ? gallery.formerSlugs : [];
+  return [slug, ...former.map((value: unknown) => safeSlug(String(value))).filter(Boolean)];
+}
+function storedInGallery(key: unknown, gallery: Record<string, any>, slug: string) {
+  return (
+    typeof key === "string" &&
+    storageSlugs(gallery, slug).some((folder) => key.startsWith(`couples/${folder}/`))
+  );
+}
 function authorized(request: Request, env: Env) {
   return (
     request.headers.get("authorization") === `Bearer ${env.ADMIN_ACCESS_CODE}`
@@ -142,7 +154,6 @@ function galleryReferences(
   const videoSources = new Set<string>();
   const sourceWithReferencedAsset = new Set<string>();
   for (const { value: gallery } of galleries) {
-    const slug = safeSlug(String(gallery.slug || ""));
     for (const field of ["computerCoverUrl", "phoneCoverUrl", "shareImageUrl"]) {
       const value = gallery[field];
       if (typeof value !== "string") continue;
@@ -174,12 +185,12 @@ function galleryReferences(
         }
       }
       if (typeof item.assetId === "string") muxAssets.add(item.assetId);
-      if (
-        item.type === "video" &&
-        slug &&
+      const folder =
         typeof item.originalKey === "string"
-      ) {
-        const source = `${slug}\n${item.originalKey}`;
+          ? item.originalKey.match(/^couples\/([^/]+)\/video\//)?.[1]
+          : undefined;
+      if (item.type === "video" && folder) {
+        const source = `${folder}\n${item.originalKey}`;
         videoSources.add(source);
         if (typeof item.assetId === "string")
           sourceWithReferencedAsset.add(source);
@@ -315,7 +326,7 @@ async function galleryArchive(
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
-      item.originalKey?.startsWith(`couples/${slug}/`) &&
+      storedInGallery(item.originalKey, gallery, slug) &&
       (!selectedIds?.size || selectedIds.has(String(item.id))) &&
       inSelection(item, selection),
   );
@@ -430,7 +441,7 @@ function mobileDownloadsPage(
 ) {
   const media = (gallery.media || []).filter(
     (item: Record<string, any>) =>
-      item.originalKey?.startsWith(`couples/${slug}/`) &&
+      storedInGallery(item.originalKey, gallery, slug) &&
       (!selectedIds?.size || selectedIds.has(String(item.id))) &&
       inSelection(item, selection),
   );
@@ -464,6 +475,10 @@ async function permanentlyDeleteGallery(
   ];
   await Promise.all(assetIds.map((id) => deleteMuxAsset(env, id)));
   await deleteR2Prefix(env.MEDIA, `couples/${slug}/`);
+  const own = galleryReferences([{ key: `galleries/${slug}.json`, value: gallery }]).r2,
+    former = [...own].filter((key) => key.startsWith("couples/") && !key.startsWith(`couples/${slug}/`));
+  for (let index = 0; index < former.length; index += 1000)
+    await env.MEDIA.delete(former.slice(index, index + 1000));
   await env.MEDIA.delete(`galleries/${slug}.json`);
 }
 
@@ -859,9 +874,49 @@ export default {
           return json({ error: "Gallery not found" }, 404, origin);
         return json(gallery, 200, origin);
       }
+      const renameMatch = url.pathname.match(/^\/api\/galleries\/([^/]+)\/rename$/);
+      if (renameMatch && request.method === "POST") {
+        if (!authorized(request, env))
+          return json({ error: "Unauthorized" }, 401, origin);
+        const slug = safeSlug(renameMatch[1]);
+        const body = await request.json<{ slug?: string }>().catch(() => ({}) as { slug?: string });
+        const next = safeSlug(String(body.slug || ""));
+        if (!slug || !next) return json({ error: "Invalid link" }, 400, origin);
+        if (next === slug) return json({ error: "Same link" }, 400, origin);
+        const stored = await env.MEDIA.get(`galleries/${slug}.json`);
+        if (!stored) return json({ error: "Gallery not found" }, 404, origin);
+        if (await env.MEDIA.head(`galleries/${next}.json`))
+          return json({ error: "This link is already used by another gallery" }, 409, origin);
+        const gallery = await stored.json<Record<string, any>>();
+        const former = new Set(storageSlugs(gallery, slug));
+        former.delete(next);
+        gallery.slug = next;
+        gallery.formerSlugs = [...former];
+        gallery.updatedAt = new Date().toISOString();
+        await env.MEDIA.put(`galleries/${next}.json`, JSON.stringify(gallery), {
+          httpMetadata: { contentType: "application/json" },
+        });
+        // Views/plays/downloads follow the gallery.
+        let cursor: string | undefined;
+        do {
+          const listed = await env.MEDIA.list({ prefix: `analytics/${slug}/`, cursor });
+          for (const object of listed.objects) {
+            const body = await env.MEDIA.get(object.key);
+            if (!body) continue;
+            await env.MEDIA.put(`analytics/${next}/${object.key.slice(`analytics/${slug}/`.length)}`, await body.arrayBuffer(), {
+              httpMetadata: { contentType: "application/json" },
+            });
+            await env.MEDIA.delete(object.key);
+          }
+          cursor = listed.truncated ? listed.cursor : undefined;
+        } while (cursor);
+        await env.MEDIA.delete(`galleries/${slug}.json`);
+        return json(gallery, 200, origin);
+      }
       if (
         url.pathname.startsWith("/api/galleries/") &&
         !url.pathname.endsWith("/restore") &&
+        !url.pathname.endsWith("/rename") &&
         request.method === "POST"
       ) {
         if (!authorized(request, env))
@@ -869,6 +924,11 @@ export default {
         const slug = safeSlug(url.pathname.split("/").pop() || "");
         if (!slug) return json({ error: "Invalid slug" }, 400, origin);
         const gallery = await request.json<Record<string, any>>();
+        if (!Array.isArray(gallery.formerSlugs)) {
+          const previous = await env.MEDIA.get(`galleries/${slug}.json`);
+          const former = previous && (await previous.json<Record<string, any>>()).formerSlugs;
+          if (Array.isArray(former)) gallery.formerSlugs = former;
+        }
         gallery.slug = slug;
         gallery.updatedAt = new Date().toISOString();
         await env.MEDIA.put(`galleries/${slug}.json`, JSON.stringify(gallery), {

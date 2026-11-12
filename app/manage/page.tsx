@@ -58,6 +58,8 @@ type Gallery = {
   phoneCoverZoom?: number;
   shareImageUrl?: string;
   shareImageFor?: string;
+  // Links this gallery had before; its files stay in their storage folders.
+  formerSlugs?: string[];
   featuredVideoId?: string;
   media: Media[];
 };
@@ -324,7 +326,7 @@ export default function Manager() {
             body: JSON.stringify({
               originalKey: item.originalKey,
               title: item.title || (isBusiness(g) ? "Film" : "Wedding film"),
-              coupleSlug: slug,
+              coupleSlug: item.originalKey?.split("/")[1] || slug,
               ...(item.raw ? { raw: true } : {}),
             }),
           });
@@ -684,7 +686,9 @@ function Editor({
   const galleryRef = useRef(gallery);
   const lastAutosaved = useRef(JSON.stringify(gallery)),
     // The first save fixes the gallery's link, so wait until the name fields are left.
-    [editingName, setEditingName] = useState(false);
+    [editingName, setEditingName] = useState(false),
+    [linkDraft, setLinkDraft] = useState<string | null>(null),
+    [linkState, setLinkState] = useState<{ busy?: boolean; note?: string }>({});
   const automaticPublishStarted = useRef(false);
   useEffect(() => {
     galleryRef.current = gallery;
@@ -907,6 +911,39 @@ function Editor({
     }, 850);
     return () => window.clearTimeout(timer);
   }, [gallery, editingName]);
+  // The gallery's public link. Changing it on a saved gallery breaks the old link.
+  const currentLink = gallerySlug(gallery),
+    nextLink = (linkDraft ?? currentLink).replace(/^-+|-+$/g, ""),
+    linkChanged = linkDraft !== null && Boolean(nextLink) && nextLink !== currentLink;
+  async function changeLink() {
+    if (!linkChanged || linkState.busy) return;
+    const auth = { Authorization: `Bearer ${code}`, "Content-Type": "application/json" };
+    setLinkState({ busy: true });
+    try {
+      if (!gallery.slug) {
+        const taken = await fetch(`${API}/api/galleries/${nextLink}`, { headers: auth });
+        if (taken.ok) return setLinkState({ note: "This link is already used by another gallery" });
+        change({ ...gallery, slug: nextLink });
+      } else {
+        if (!window.confirm(`The old link ${SITE.replace("https://", "")}/${gallery.slug} will stop working. Change it?`))
+          return setLinkState({});
+        const response = await fetch(`${API}/api/galleries/${gallery.slug}/rename`, {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ slug: nextLink }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) return setLinkState({ note: result.error || "Could not change the link" });
+        lastAutosaved.current = JSON.stringify(result);
+        galleryRef.current = result;
+        change(result);
+      }
+      setLinkDraft(null);
+      setLinkState({ note: "Link updated" });
+    } catch {
+      setLinkState({ note: "Could not change the link" });
+    }
+  }
   async function openPreview() {
     const slug = gallerySlug(gallery);
     if (!slug) return alert(isBusiness(gallery) ? "Add the gallery name first" : "Add both names first");
@@ -1461,8 +1498,8 @@ function Editor({
                 <input
                   value={gallery.title || ""}
                   onChange={(e) => set("title", e.target.value)}
-                    onFocus={() => setEditingName(true)}
-                    onBlur={() => setEditingName(false)}
+                  onFocus={() => setEditingName(true)}
+                  onBlur={() => setEditingName(false)}
                 />
               </label>
             ) : (
@@ -1502,6 +1539,34 @@ function Editor({
                 onChange={(e) => set("weddingDate", e.target.value)}
               />
             </label>
+            <div className="gm-field-wide gm-link">
+              <label htmlFor="gallery-link">Gallery link</label>
+              <div className="gm-link-row">
+                <div className="gm-link-box">
+                  <span>{SITE.replace("https://", "")}/</span>
+                  <input
+                    id="gallery-link"
+                    value={linkDraft ?? currentLink}
+                    placeholder="names-of-the-couple"
+                    spellCheck={false}
+                    onChange={(e) => {
+                      setLinkState({});
+                      setLinkDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-"));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void changeLink();
+                      if (e.key === "Escape") setLinkDraft(null);
+                    }}
+                  />
+                </div>
+                {linkChanged && (
+                  <button className="gm-ghost" disabled={linkState.busy || saveState === "saving"} onClick={() => void changeLink()}>
+                    {linkState.busy ? "Changing…" : "Change link"}
+                  </button>
+                )}
+              </div>
+              {linkState.note && <small>{linkState.note}</small>}
+            </div>
           </div>
           <label>
             Opening note

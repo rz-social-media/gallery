@@ -4259,6 +4259,14 @@ a:focus-visible {
 .gm .gm-kind button { min-width: 104px; justify-content: center; padding: .55rem 1rem; border: 0; border-radius: 999px; background: none; color: #7a6d62; font-size: .72rem; font-weight: 600; letter-spacing: .04em; box-shadow: none; }
 .gm .gm-kind button.active { background: rgb(75, 11, 16); color: #fffdf8; }
 .gm-field-wide { grid-column: 1 / -1; }
+.gm-link-row { display: flex; align-items: stretch; gap: .6rem; margin-top: .45rem; }
+.gm-link-box { flex: 1; min-width: 0; display: flex; align-items: center; border: 1px solid #ddd2c5; border-radius: 10px; background: #fff; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.gm-link-box:focus-within { border-color: #8b5a60; box-shadow: 0 0 0 4px rgba(75, 11, 16, .09); }
+.gm-link-box span { padding-left: 1rem; color: #9a8c7f; font-size: .92rem; white-space: nowrap; }
+.gm-edit .gm-link-box input { flex: 1; min-width: 0; margin: 0; padding-left: 1px; border: 0; background: none; box-shadow: none; }
+.gm-link-row .gm-ghost { flex: none; padding: 0 1.2rem; }
+.gm-link small { display: block; margin-top: .45rem; color: #7a6d62; font-size: .72rem; font-weight: 500; }
+@media (max-width: 560px) { .gm-link-box span { display: none; } }
 .gm-kind-tag { display: inline-block; margin-right: .5rem; padding: .15rem .5rem; border-radius: 999px; background: #efe7dc; color: rgb(75, 11, 16); font-size: .62rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .gm-raw .article-head p { max-width: 560px; }
 .gm-photos figure.is-video span { background: rgba(20, 14, 12, .72); color: #fff; border-radius: 999px; padding: .25rem .55rem; letter-spacing: .08em; text-transform: uppercase; }
