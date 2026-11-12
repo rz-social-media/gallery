@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev";
+// Public home of the galleries: clean URLs with per-gallery link previews.
+const SITE = "https://rz-gallery.pages.dev";
 type View = "home" | "photos" | "films" | "raw";
 const isView = (value: string): value is Exclude<View, "home"> =>
   value === "photos" || value === "films" || value === "raw";
@@ -93,6 +95,15 @@ export default function CoupleGallery() {
     // edge worker also marks business galleries with data-brand="omni".
     const id = params.get("id") || window.location.pathname.match(/^\/(?!couple\/?$)([a-z0-9][a-z0-9-]*)\/?$/i)?.[1] || null;
     const preview = params.get("preview");
+    // Galleries moved to rz-gallery.pages.dev; old GitHub Pages links forward there.
+    if (id && !preview && window.location.hostname === "rz-social-media.github.io") {
+      const forward = new URLSearchParams(params);
+      forward.delete("id");
+      forward.delete("brand");
+      const query = forward.toString();
+      window.location.replace(`${SITE}/${encodeURIComponent(id)}${query ? `?${query}` : ""}${window.location.hash}`);
+      return;
+    }
     setOmniHint(params.get("brand") === "omni" || document.documentElement.dataset.brand === "omni");
     setSharedPhotoIds((params.get("photos") || "").split(",").filter(Boolean).slice(0, 10));
     const initialView = window.location.hash.replace("#", "");
@@ -156,6 +167,7 @@ export default function CoupleGallery() {
     };
   }, [activePhoto, gallery, view]);
   useEffect(() => {
+    if (gallery && gallery.kind !== "business") document.title = `${gallery.partnerOne} & ${gallery.partnerTwo} | RZ Weddings`;
     if (gallery?.kind !== "business") return;
     document.documentElement.dataset.brand = "omni";
     document.title = `${gallery.title || "Gallery"} | OMNI`;
@@ -279,7 +291,7 @@ export default function CoupleGallery() {
       <span>{downloadFeedback === "preparing" ? "Preparing your ZIP…" : "Your download has started"}</span>
     </div>
   );
-  const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${gallery.updatedAt ? `?v=${encodeURIComponent(gallery.updatedAt)}` : ""}`;
+  const shareUrl = `${SITE}/${encodeURIComponent(gallery.slug)}`;
   const shareGallery = async () => {
     if (navigator.share) {
       await navigator.share({ title: names, text: business ? `${names} gallery` : `${names} wedding gallery`, url: shareUrl });

@@ -3,6 +3,8 @@ import { createCRC32, createSHA256 } from "hash-wasm";
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
+  // Public gallery links: clean URLs with per-gallery link previews (cloudflare/_worker.js).
+  SITE = "https://rz-gallery.pages.dev",
   BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 type Media = {
   id: string;
@@ -341,10 +343,7 @@ export default function Manager() {
   }
   async function copyGalleryUrl(gallery: Gallery) {
     if (!gallery.published) return;
-    const version = gallery.updatedAt
-      ? `?v=${encodeURIComponent(gallery.updatedAt)}`
-      : "";
-    const shareUrl = `${API}/share/${encodeURIComponent(gallery.slug)}${version}`;
+    const shareUrl = `${SITE}/${encodeURIComponent(gallery.slug)}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setNotice("Gallery URL copied");
@@ -2017,7 +2016,7 @@ function Editor({
           <aside>
             {notice}
             {gallery.published && (
-              <a href={`${BASE}/couple/?id=${gallery.slug}${brandQuery(gallery)}`} target="_blank">
+              <a href={`${SITE}/${encodeURIComponent(gallery.slug)}`} target="_blank">
                 Open gallery ↗
               </a>
             )}
