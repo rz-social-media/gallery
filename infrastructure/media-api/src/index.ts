@@ -382,10 +382,22 @@ function galleryCover(gallery: Record<string, any>) {
 // "tel aviv" -> "Tel Aviv": capitalise each word, leave the rest as typed.
 const titleCase = (value: string) =>
   value.trim().replace(/(^|[\s-])(\p{Ll})/gu, (_, gap: string, letter: string) => gap + letter.toUpperCase());
+// Link previews can't be styled, so the place/date line uses Unicode bold sans
+// letters to read as a subtitle under the (bold) title. Latin letters and digits only.
+const boldSans = (value: string) =>
+  value.replace(/[A-Za-z0-9]/g, (char) => {
+    const code = char.charCodeAt(0);
+    if (code <= 57) return String.fromCodePoint(0x1d7ec + code - 48);
+    if (code <= 90) return String.fromCodePoint(0x1d5d4 + code - 65);
+    return String.fromCodePoint(0x1d5ee + code - 97);
+  });
 function sharePage(gallery: Record<string, any>, slug: string) {
   const names = galleryName(gallery);
   const details = [titleCase(gallery.location || ""), gallery.weddingDate].filter(Boolean).join(" · ");
-  const description = [details, "House of Content", "Capturing Moments, Telling Your Story"].filter(Boolean).join("\n");
+  const tagline = ["House of Content", "Capturing Moments, Telling Your Story"];
+  // Plain text for search engines and screen readers; styled for chat previews.
+  const description = [details, ...tagline].filter(Boolean).join("\n");
+  const previewDescription = [boldSans(details), ...tagline].filter(Boolean).join("\n");
   const destination = publicGalleryUrl(slug, gallery);
   const site = isBusiness(gallery) ? "OMNI" : "RZ Weddings";
   const imageAlt = isBusiness(gallery) ? `${names} gallery` : `${names} wedding gallery`;
@@ -397,7 +409,7 @@ function sharePage(gallery: Record<string, any>, slug: string) {
       ? gallery.shareImageUrl
       : plainCover;
   return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(description)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(previewDescription)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(previewDescription)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
