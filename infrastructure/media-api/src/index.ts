@@ -405,7 +405,9 @@ const boldSans = (value: string) =>
 function sharePage(gallery: Record<string, any>, slug: string) {
   const names = galleryName(gallery);
   const details = [titleCase(gallery.location || ""), gallery.weddingDate].filter(Boolean).join(" · ");
-  const tagline = ["House of Content Creation", "Capturing Moments, Telling Your Story"];
+  const tagline = isBusiness(gallery)
+    ? ["Distilling Brand DNA Into Digital Identity"]
+    : ["House of Content Creation", "Capturing Moments, Telling Your Story"];
   // Plain text for search engines and screen readers; styled for chat previews.
   const description = [details, ...tagline].filter(Boolean).join("\n");
   const previewDescription = [boldSans(details), ...tagline].filter(Boolean).join("\n");
