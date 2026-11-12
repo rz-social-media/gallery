@@ -401,15 +401,19 @@ function sharePage(gallery: Record<string, any>, slug: string) {
   const destination = publicGalleryUrl(slug, gallery);
   const site = isBusiness(gallery) ? "OMNI" : "RZ Weddings";
   const imageAlt = isBusiness(gallery) ? `${names} gallery` : `${names} wedding gallery`;
-  // The manager stores a copy of the cover with the logo; use it only while it
-  // still matches the current cover.
+  // Chat apps (WhatsApp on iOS) show the site icon beside the link's domain.
+  const icon = isBusiness(gallery)
+    ? "https://rz-social-media.github.io/gallery/brand/omni-favicon.png"
+    : "https://rz-social-media.github.io/gallery/apple-touch-icon.png";
+  // The manager stores a 4:3 crop of the cover; use it only while it still
+  // matches the current cover.
   const plainCover = galleryCover(gallery);
   const cover =
     typeof gallery.shareImageUrl === "string" && String(gallery.shareImageFor || "").startsWith(`${plainCover}|`)
       ? gallery.shareImageUrl
       : plainCover;
   return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(previewDescription)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(previewDescription)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(names)} | ${site}</title><link rel="icon" type="image/png" href="${icon}"><link rel="apple-touch-icon" href="${icon}"><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:site_name" content="${site}"><meta property="og:title" content="${escapeHtml(names)}"><meta property="og:description" content="${escapeHtml(previewDescription)}"><meta property="og:url" content="${escapeHtml(new URL(`/share/${slug}`, "https://rz-gallery-media-api.galfadlon2.workers.dev").href)}">${cover ? `<meta property="og:image" content="${escapeHtml(cover)}"><meta property="og:image:alt" content="${escapeHtml(imageAlt)}">` : ""}<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(names)}"><meta name="twitter:description" content="${escapeHtml(previewDescription)}">${cover ? `<meta name="twitter:image" content="${escapeHtml(cover)}">` : ""}<link rel="canonical" href="${escapeHtml(destination)}"><script>location.replace(${JSON.stringify(destination)})</script></head><body><p><a href="${escapeHtml(destination)}">Open ${escapeHtml(names)}’s gallery</a></p></body></html>`,
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",

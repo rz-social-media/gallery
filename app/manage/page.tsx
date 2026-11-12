@@ -1014,8 +1014,8 @@ function Editor({
       : [];
   });
   const automaticCover = coverCandidates[0]?.url;
-  // Link previews (WhatsApp etc.) show one image, so the logo is drawn onto a
-  // copy of the cover. Same cover choice as the media API's galleryCover().
+  // Link previews (WhatsApp etc.) get a landscape crop of the cover. Same
+  // cover choice as the media API's galleryCover().
   const shareCover =
     gallery.computerCoverUrl ||
     gallery.phoneCoverUrl ||
@@ -1029,12 +1029,12 @@ function Editor({
       : shareCover === gallery.phoneCoverUrl
         ? [gallery.phoneCoverPosition, gallery.phoneCoverZoom]
         : [undefined, undefined];
-  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|3`;
+  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|4`;
   useEffect(() => {
     if (!gallery.slug || !shareCover || gallery.shareImageFor === shareKey || uploading) return;
     const timer = window.setTimeout(async () => {
       try {
-        const image = await renderShareImage(shareCover, business, sharePosition, shareZoom),
+        const image = await renderShareImage(shareCover, sharePosition, shareZoom),
           key = await signed(image, "share-preview.jpg", "photo-web", gallery.slug, await fingerprint(image));
         const updated = { ...galleryRef.current, shareImageUrl: `${API}/media/${key}`, shareImageFor: shareKey };
         galleryRef.current = updated;
@@ -2139,10 +2139,10 @@ function CoverFramer({
   );
 }
 
-// Cover + brand mark for link previews. RZ: the ivory seal used on the site;
-// OMNI: the ivory symbol. Top-left, like the gallery header. Always a 4:3
-// landscape: WhatsApp crops tall images and the corner logo got cut off.
-async function renderShareImage(coverUrl: string, business: boolean, position?: string, zoom?: number) {
+// Link-preview image: the cover as a 4:3 landscape, cropped like the client
+// sees it (WhatsApp crops tall images). The brand mark comes from the share
+// page's icon, which chat apps show beside the link.
+async function renderShareImage(coverUrl: string, position?: string, zoom?: number) {
   const load = (src: string) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
@@ -2160,39 +2160,8 @@ async function renderShareImage(coverUrl: string, business: boolean, position?: 
     scale = Math.max(canvas.width / cover.naturalWidth, canvas.height / cover.naturalHeight) * Math.max(1, zoom || 1),
     width = cover.naturalWidth * scale,
     height = cover.naturalHeight * scale;
-  const context = canvas.getContext("2d")!,
-    unit = Math.min(canvas.width, canvas.height),
-    margin = unit * 0.07;
+  const context = canvas.getContext("2d")!;
   context.drawImage(cover, -x * (width - canvas.width), -y * (height - canvas.height), width, height);
-  const glow = context.createRadialGradient(0, 0, 0, 0, 0, unit * 0.55);
-  glow.addColorStop(0, "rgba(0, 0, 0, .38)");
-  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-  context.fillStyle = glow;
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  if (business) {
-    const mark = await load(`${BASE}/brand/omni-symbol-ivory.png`),
-      width = unit * 0.24;
-    context.drawImage(mark, margin, margin, width, (width * mark.naturalHeight) / mark.naturalWidth);
-  } else {
-    const radius = unit * 0.075,
-      x = margin + radius,
-      y = margin + radius;
-    // The RZ mark from the site icon: red seal, thin cream ring, cream bold serif.
-    await document.fonts.load(`700 ${Math.round(radius * 0.74)}px "Playfair Display"`).catch(() => undefined);
-    context.beginPath();
-    context.arc(x, y, radius + unit * 0.008, 0, Math.PI * 2);
-    context.fillStyle = "#fffaf5";
-    context.fill();
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = "#a91f24";
-    context.fill();
-    context.fillStyle = "#fffaf5";
-    context.font = `700 ${Math.round(radius * 0.74)}px "Playfair Display", Georgia, serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText("RZ", x, y + radius * 0.04);
-  }
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Preview image failed"))), "image/jpeg", 0.88),
   );
