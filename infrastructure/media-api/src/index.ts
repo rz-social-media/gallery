@@ -406,10 +406,10 @@ function sharePage(gallery: Record<string, any>, slug: string) {
     ? "https://rz-social-media.github.io/gallery/brand/omni-favicon.png"
     : "https://rz-social-media.github.io/gallery/apple-touch-icon.png";
   // The manager stores a 4:3 crop of the cover; use it only while it still
-  // matches the current cover.
+  // matches the current cover. "|4" = current format (older ones had a logo drawn on).
   const plainCover = galleryCover(gallery);
   const cover =
-    typeof gallery.shareImageUrl === "string" && String(gallery.shareImageFor || "").startsWith(`${plainCover}|`)
+    typeof gallery.shareImageUrl === "string" && String(gallery.shareImageFor || "").startsWith(`${plainCover}|`) && String(gallery.shareImageFor).endsWith("|4")
       ? gallery.shareImageUrl
       : plainCover;
   return new Response(
