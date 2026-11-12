@@ -89,9 +89,11 @@ export default function CoupleGallery() {
   const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
+    // rz-gallery.pages.dev serves galleries at clean URLs (/talia-liel); its
+    // edge worker also marks business galleries with data-brand="omni".
+    const id = params.get("id") || window.location.pathname.match(/^\/(?!couple\/?$)([a-z0-9][a-z0-9-]*)\/?$/i)?.[1] || null;
     const preview = params.get("preview");
-    setOmniHint(params.get("brand") === "omni");
+    setOmniHint(params.get("brand") === "omni" || document.documentElement.dataset.brand === "omni");
     setSharedPhotoIds((params.get("photos") || "").split(",").filter(Boolean).slice(0, 10));
     const initialView = window.location.hash.replace("#", "");
     if (isView(initialView)) {

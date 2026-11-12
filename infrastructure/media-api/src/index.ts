@@ -19,6 +19,7 @@ const json = (data: unknown, status = 200, origin = "*") =>
     status,
     headers: {
       "Access-Control-Allow-Origin": origin,
+      Vary: "Origin",
       "Access-Control-Allow-Headers": "authorization, content-type",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Cache-Control": "no-store",
@@ -363,7 +364,6 @@ async function galleryArchive(
     "Content-Disposition",
     `attachment; filename="${slug}-${suffix}.zip"`,
   );
-  headers.set("Access-Control-Allow-Origin", env.ALLOWED_ORIGIN);
   headers.set("Cache-Control", "private,no-store");
   return new Response(headOnly ? null : zipStream(entries), { status: 200, headers });
 }
@@ -467,10 +467,17 @@ async function permanentlyDeleteGallery(
   await env.MEDIA.delete(`galleries/${slug}.json`);
 }
 
+// ALLOWED_ORIGIN is a comma-separated list (GitHub Pages and rz-gallery.pages.dev).
+function corsOrigin(request: Request, env: Env) {
+  const allowed = env.ALLOWED_ORIGIN.split(",").map((value) => value.trim()),
+    requested = request.headers.get("Origin") || "";
+  return allowed.includes(requested) ? requested : allowed[0];
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url),
-      origin = env.ALLOWED_ORIGIN;
+      origin = corsOrigin(request, env);
     if (request.method === "OPTIONS")
       return new Response(null, {
         status: 204,
@@ -807,6 +814,10 @@ export default {
           selectedIds,
           request.method === "HEAD",
         );
+        if (archive) {
+          archive.headers.set("Access-Control-Allow-Origin", origin);
+          archive.headers.set("Vary", "Origin");
+        }
         return archive || json({ error: "No files to download" }, 404, origin);
       }
       const downloadsMatch = url.pathname.match(

@@ -10,5 +10,5 @@ binding = "MEDIA"
 bucket_name = "rz-gallery-media"
 
 [vars]
-ALLOWED_ORIGIN = "https://rz-social-media.github.io"
+ALLOWED_ORIGIN = "https://rz-social-media.github.io,https://rz-gallery.pages.dev"
 R2_BUCKET_NAME = "rz-gallery-media"
