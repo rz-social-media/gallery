@@ -21,6 +21,8 @@ type Media = {
   url: string | null;
   playbackId: string | null;
   posterUrl?: string | null;
+  posterPosition?: string;
+  ratio?: number;
   title: string;
   alt: string;
   originalKey: string;
@@ -791,6 +793,7 @@ export default function CoupleGallery() {
                       film.posterUrl ||
                       `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
                     }
+                    style={film.posterUrl && film.posterPosition ? { objectPosition: film.posterPosition } : undefined}
                     alt=""
                   />
                   <span className="rzf-card-shade" />
@@ -922,7 +925,7 @@ function JustifiedPhotoGrid({
   const columns: Array<{ height: number; items: Array<{ photo: Media; index: number; ratio: number }> }> =
     Array.from({ length: columnCount }, () => ({ height: 0, items: [] }));
   photos.forEach((photo, index) => {
-    const ratio = ratios[photo.id] || 1.45;
+    const ratio = photo.ratio || ratios[photo.id] || 1.45;
     const shortest = columns.reduce((min, column) => (column.height < min.height ? column : min), columns[0]);
     shortest.items.push({ photo, index, ratio });
     shortest.height += 1 / ratio;
@@ -945,6 +948,9 @@ function JustifiedPhotoGrid({
                       : photo.url!
                   }
                   alt={photo.alt || `${names} photograph ${index + 1}`}
+                  loading={index < columnCount * 3 ? "eager" : "lazy"}
+                  fetchPriority={index < columnCount * 2 ? "high" : "auto"}
+                  decoding="async"
                   onLoad={(event) => {
                     const image = event.currentTarget;
                     image.dataset.loaded = "true";

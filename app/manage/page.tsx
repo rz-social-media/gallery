@@ -1,6 +1,6 @@
 "use client";
 import { createCRC32, createSHA256 } from "hash-wasm";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
   BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -14,6 +14,8 @@ type Media = {
   playbackId?: string;
   assetId?: string;
   posterUrl?: string;
+  posterPosition?: string;
+  ratio?: number;
   filename: string;
   sha256?: string;
   crc32?: number;
@@ -590,8 +592,12 @@ function Editor({
     [videoStates, setVideoStates] = useState<Record<string, string>>({}),
     [dropActive, setDropActive] = useState(false),
     [rawDropActive, setRawDropActive] = useState(false),
-    [draggedMediaId, setDraggedMediaId] = useState<string | null>(null),
+    [draggedMediaIds, setDraggedMediaIds] = useState<string[]>([]),
+    [dropTargetId, setDropTargetId] = useState<string | null>(null),
+    [picked, setPicked] = useState<string[]>([]),
+    [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null),
     [coverFor, setCoverFor] = useState<string | null>(null),
+    [coverDraft, setCoverDraft] = useState<{ url: string; position: string } | null>(null),
     [galleryCoverFor, setGalleryCoverFor] = useState<
       "computerCoverUrl" | "phoneCoverUrl" | null
     >(null),
@@ -602,6 +608,14 @@ function Editor({
     [checkingHealth, setCheckingHealth] = useState(false),
     [queue, setQueue] = useState<QueueItem[]>([]);
   const queueFiles = useRef<Map<string, File>>(new Map());
+  const lastPicked = useRef<string | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPicked([]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const currentQueueId = useRef<string | null>(null);
   useEffect(() => {
     const id = currentQueueId.current;
@@ -723,6 +737,39 @@ function Editor({
   const set = (k: keyof Gallery, v: any) => change({ ...gallery, [k]: v });
   const business = isBusiness(gallery);
   const rawMedia = gallery.media.filter((item) => item.raw);
+  const photoIds = gallery.media.filter((item) => item.type === "photo" && !item.raw).map((item) => item.id),
+    rawIds = rawMedia.map((item) => item.id);
+  const pickedBar = (scope: string[]) => {
+    const count = picked.filter((id) => scope.includes(id)).length;
+    return count ? (
+      <div className="gm-picked-bar">
+        <strong>{count} selected</strong>
+        <span>Drag any of them to move the group</span>
+        <button onClick={() => movePickedToEdge("start", scope)}>Move to start</button>
+        <button onClick={() => movePickedToEdge("end", scope)}>Move to end</button>
+        <button onClick={() => setPicked([])}>Clear</button>
+      </div>
+    ) : null;
+  };
+  const sortable = (id: string, scope: string[]) => ({
+    "data-media-id": id,
+    draggable: true,
+    onClick: (event: ReactMouseEvent) => pickMedia(event, id, scope),
+    onDragStart: (event: ReactDragEvent) => startMediaDrag(event, id),
+    onDragOver: (event: ReactDragEvent) => {
+      event.preventDefault();
+      if (dropTargetId !== id) setDropTargetId(id);
+    },
+    onDragEnd: () => {
+      setDraggedMediaIds([]);
+      setDropTargetId(null);
+    },
+    onDrop: () => moveMedia(id),
+  });
+  const sortClass = (id: string, extra = "") =>
+    [extra, picked.includes(id) && "is-picked", draggedMediaIds.includes(id) && "is-dragging", dropTargetId === id && !draggedMediaIds.includes(id) && "is-drop-target"]
+      .filter(Boolean)
+      .join(" ");
   async function persist(value: Gallery) {
     const response = await fetch(`${API}/api/galleries/${value.slug}`, {
       method: "POST",
@@ -843,22 +890,94 @@ function Editor({
       }
     }
   }
+  // Moves every dragged item (keeping their relative order) to the target's spot.
   function moveMedia(targetId: string) {
-    if (!draggedMediaId || draggedMediaId === targetId) return;
-    const media = [...galleryRef.current.media],
-      from = media.findIndex((item) => item.id === draggedMediaId),
+    const ids = draggedMediaIds;
+    setDraggedMediaIds([]);
+    setDropTargetId(null);
+    if (!ids.length || ids.includes(targetId)) return;
+    const media = galleryRef.current.media,
+      from = media.findIndex((item) => ids.includes(item.id)),
       to = media.findIndex((item) => item.id === targetId);
     if (from < 0 || to < 0) return;
-    const [moved] = media.splice(from, 1);
-    media.splice(to, 0, moved);
-    setDraggedMediaId(null);
-    void updateMedia(media);
+    const moving = media.filter((item) => ids.includes(item.id)),
+      rest = media.filter((item) => !ids.includes(item.id));
+    rest.splice(rest.findIndex((item) => item.id === targetId) + (to > from ? 1 : 0), 0, ...moving);
+    void updateMedia(rest);
   }
-  function selectVideoCover(videoId: string, posterUrl?: string) {
+  function movePickedToEdge(edge: "start" | "end", scope: string[]) {
+    const ids = picked.filter((id) => scope.includes(id)),
+      anchor = (edge === "start" ? scope : [...scope].reverse()).find((id) => !ids.includes(id));
+    if (!ids.length || !anchor) return;
+    const media = galleryRef.current.media,
+      moving = media.filter((item) => ids.includes(item.id)),
+      rest = media.filter((item) => !ids.includes(item.id));
+    rest.splice(rest.findIndex((item) => item.id === anchor) + (edge === "end" ? 1 : 0), 0, ...moving);
+    void updateMedia(rest);
+  }
+  // Finder-style picking: click selects one, ⌘/Ctrl toggles, Shift adds a range.
+  function pickMedia(event: ReactMouseEvent, id: string, scope: string[]) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    if (event.metaKey || event.ctrlKey)
+      setPicked((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    else if (event.shiftKey && lastPicked.current && scope.includes(lastPicked.current)) {
+      const [a, b] = [scope.indexOf(lastPicked.current), scope.indexOf(id)].sort((x, y) => x - y);
+      setPicked((current) => [...new Set([...current, ...scope.slice(a, b + 1)])]);
+    } else setPicked((current) => current.length === 1 && current[0] === id ? [] : [id]);
+    lastPicked.current = id;
+  }
+  function startMediaDrag(event: ReactDragEvent, id: string) {
+    const ids = picked.includes(id) ? picked : [id];
+    if (!picked.includes(id)) setPicked([]);
+    setDraggedMediaIds(ids);
+    if (ids.length > 1) {
+      const ghost = document.createElement("div");
+      ghost.className = "gm-drag-ghost";
+      ghost.textContent = `${ids.length} items`;
+      document.body.appendChild(ghost);
+      event.dataTransfer.setDragImage(ghost, 24, 20);
+      window.setTimeout(() => ghost.remove(), 0);
+    }
+  }
+  // Rubber-band selection: drag on empty space around the thumbnails.
+  function startMarquee(event: ReactMouseEvent<HTMLElement>) {
+    if (event.button !== 0 || (event.target as HTMLElement).closest("figure, button, input, textarea, select, label, a, .film"))
+      return;
+    event.preventDefault();
+    const area = event.currentTarget,
+      x = event.clientX,
+      y = event.clientY,
+      base = event.metaKey || event.ctrlKey || event.shiftKey ? picked : [];
+    let moved = false;
+    const onMove = (move: MouseEvent) => {
+      const left = Math.min(x, move.clientX), top = Math.min(y, move.clientY),
+        right = Math.max(x, move.clientX), bottom = Math.max(y, move.clientY);
+      if (!moved && right - left < 4 && bottom - top < 4) return;
+      moved = true;
+      setMarquee({ left, top, width: right - left, height: bottom - top });
+      const hits = [...area.querySelectorAll<HTMLElement>("figure[data-media-id]")]
+        .filter((figure) => {
+          const box = figure.getBoundingClientRect();
+          return box.left < right && box.right > left && box.top < bottom && box.bottom > top;
+        })
+        .map((figure) => figure.dataset.mediaId!);
+      setPicked([...new Set([...base, ...hits])]);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setMarquee(null);
+      if (!moved) setPicked(base);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+  function selectVideoCover(videoId: string, posterUrl?: string, posterPosition?: string) {
     const media = galleryRef.current.media.map((item) =>
-      item.id === videoId ? { ...item, posterUrl } : item,
+      item.id === videoId ? { ...item, posterUrl, posterPosition } : item,
     );
     setCoverFor(null);
+    setCoverDraft(null);
     void updateMedia(media);
   }
   function selectGalleryCover(
@@ -1085,6 +1204,7 @@ function Editor({
         if (file.type.startsWith("image/")) {
           const originalKey = await signed(file, file.name, "photo", slug, sha256),
             web = await resize(file),
+            ratio = await imageRatio(web),
             webSha256 = await fingerprint(web),
             webKey = await signed(
               web,
@@ -1106,6 +1226,7 @@ function Editor({
               size: file.size,
               originalKey,
               url: `${API}/media/${webKey}`,
+              ...(ratio ? { ratio } : {}),
               ...rawFlag,
             },
           ];
@@ -1296,7 +1417,7 @@ function Editor({
             />
           </label>
         </article>
-        <article>
+        <article onMouseDown={startMarquee}>
           <div className="article-head">
             <div>
               <small>01</small>
@@ -1411,19 +1532,18 @@ function Editor({
                 {gallery.media.filter((item) => item.type === "photo" && !item.raw).length} photos
               </strong>
             </div>
-            <span>Drag to reorder · First photo is the gallery cover</span>
+            <span>Drag to reorder · ⌘-click or drag a box to pick several · First photo is the cover</span>
           </div>
+          {pickedBar(photoIds)}
           <div className="gm-photos">
             {gallery.media
               .filter((x) => x.type === "photo" && !x.raw)
               .map((p, i) => (
                 <figure
                   key={p.id}
-                  draggable
-                  onDragStart={() => setDraggedMediaId(p.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => moveMedia(p.id)}
-                  title="Drag to reorder"
+                  className={sortClass(p.id)}
+                  {...sortable(p.id, photoIds)}
+                  title="Drag to reorder · ⌘-click to pick several"
                 >
                   <img src={p.url} />
                   {i === 0 && <span>Cover</span>}
@@ -1459,14 +1579,14 @@ function Editor({
                 className={`film ${v.assetId && !v.playbackId ? "is-processing" : ""}`}
                 key={v.id}
                 draggable
-                onDragStart={() => setDraggedMediaId(v.id)}
+                onDragStart={() => setDraggedMediaIds([v.id])}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => moveMedia(v.id)}
                 title="Drag to reorder"
               >
                 <div className="film-poster">
                   {v.posterUrl ? (
-                    <img src={v.posterUrl} alt="" />
+                    <img src={v.posterUrl} alt="" style={{ objectPosition: v.posterPosition }} />
                   ) : v.playbackId ? (
                     <img
                       src={`https://image.mux.com/${v.playbackId}/thumbnail.webp?time=0&width=360&fit_mode=smartcrop`}
@@ -1519,7 +1639,12 @@ function Editor({
                   >
                     {gallery.featuredVideoId === v.id || (!gallery.featuredVideoId && gallery.media.filter((item) => item.type === "video" && !item.raw)[0]?.id === v.id) ? "Background film ✓" : "Set as background"}
                   </button>
-                  <button onClick={() => setCoverFor(v.id)}>
+                  <button
+                    onClick={() => {
+                      setCoverDraft(v.posterUrl ? { url: v.posterUrl, position: v.posterPosition || "50% 50%" } : null);
+                      setCoverFor(v.id);
+                    }}
+                  >
                     Choose cover
                   </button>
                   <button
@@ -1538,7 +1663,7 @@ function Editor({
             ))}
         </article>
         {business && (
-          <article className="gm-raw">
+          <article className="gm-raw" onMouseDown={startMarquee}>
             <div className="article-head">
               <div>
                 <small>02</small>
@@ -1590,18 +1715,16 @@ function Editor({
                   {rawMedia.filter((item) => item.type === "video").length} videos
                 </strong>
               </div>
-              <span>Drag to reorder · Videos stream once you publish</span>
+              <span>Drag to reorder · ⌘-click or drag a box to pick several</span>
             </div>
+            {pickedBar(rawIds)}
             <div className="gm-photos">
               {rawMedia.map((item) => (
                 <figure
                   key={item.id}
-                  className={item.type === "video" ? "is-video" : ""}
-                  draggable
-                  onDragStart={() => setDraggedMediaId(item.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => moveMedia(item.id)}
-                  title="Drag to reorder"
+                  className={sortClass(item.id, item.type === "video" ? "is-video" : "")}
+                  {...sortable(item.id, rawIds)}
+                  title="Drag to reorder · ⌘-click to pick several"
                 >
                   <img src={item.type === "photo" ? item.url : item.posterUrl} alt="" />
                   {item.type === "video" && <span>Video</span>}
@@ -1662,7 +1785,36 @@ function Editor({
             })}
           </div>
         </article>
-        {coverFor && (
+        {marquee && <div className="gm-marquee" style={marquee} />}
+        {coverFor && coverDraft && (
+          <div className="cover-picker" onClick={() => setCoverFor(null)}>
+            <section className="cover-framing" onClick={(event) => event.stopPropagation()}>
+              <div>
+                <div>
+                  <small>Film cover</small>
+                  <h2>Position the photograph</h2>
+                </div>
+                <button aria-label="Close" onClick={() => setCoverFor(null)}><GmIcon name="close" /></button>
+              </div>
+              <CoverFramer
+                url={coverDraft.url}
+                position={coverDraft.position}
+                onChange={(position) => setCoverDraft({ ...coverDraft, position })}
+              />
+              <div className="cover-framing-actions">
+                <button onClick={() => setCoverDraft(null)}>Choose another photo</button>
+                <button onClick={() => setCoverDraft({ ...coverDraft, position: "50% 50%" })}>Center</button>
+                <button
+                  className="is-primary"
+                  onClick={() => selectVideoCover(coverFor, coverDraft.url, coverDraft.position)}
+                >
+                  Save cover
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+        {coverFor && !coverDraft && (
           <div className="cover-picker" onClick={() => setCoverFor(null)}>
             <section onClick={(event) => event.stopPropagation()}>
               <div>
@@ -1678,7 +1830,7 @@ function Editor({
                   .map((photo) => (
                     <button
                       key={photo.id}
-                      onClick={() => selectVideoCover(coverFor, photo.url)}
+                      onClick={() => setCoverDraft({ url: photo.url!, position: "50% 50%" })}
                     >
                       <img src={photo.url} alt={photo.alt} />
                     </button>
@@ -1766,6 +1918,64 @@ function Editor({
       </section>
     </main>
   );
+}
+
+// The client's film cards are 1.626:1; drag the photo to choose what stays in frame.
+function CoverFramer({ url, position, onChange }: { url: string; position: string; onChange: (position: string) => void }) {
+  const frame = useRef<HTMLDivElement | null>(null),
+    [natural, setNatural] = useState<{ width: number; height: number } | null>(null),
+    [dragging, setDragging] = useState(false),
+    [x, y] = position.split(" ").map((value) => parseFloat(value));
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!frame.current || !natural) return;
+    event.preventDefault();
+    const box = frame.current.getBoundingClientRect(),
+      scale = Math.max(box.width / natural.width, box.height / natural.height),
+      spareX = natural.width * scale - box.width,
+      spareY = natural.height * scale - box.height,
+      startX = event.clientX,
+      startY = event.clientY;
+    const clamp = (value: number) => Math.round(Math.min(100, Math.max(0, value)) * 10) / 10;
+    const onMove = (move: PointerEvent) =>
+      onChange(
+        `${spareX > 1 ? clamp(x - ((move.clientX - startX) / spareX) * 100) : 50}% ${spareY > 1 ? clamp(y - ((move.clientY - startY) / spareY) * 100) : 50}%`,
+      );
+    const onUp = () => {
+      setDragging(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    setDragging(true);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+  return (
+    <>
+      <div className={`cover-framer ${dragging ? "is-dragging" : ""}`} ref={frame} onPointerDown={onPointerDown}>
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          style={{ objectPosition: position }}
+          onLoad={(event) => setNatural({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
+        />
+        <span className="cover-framer-grid" aria-hidden="true" />
+      </div>
+      <p className="cover-framer-hint">Drag the photo to position it · The frame matches the film card your client sees</p>
+    </>
+  );
+}
+
+// Width / height, stored so the client grid can lay out before images arrive.
+async function imageRatio(blob: Blob) {
+  try {
+    const bitmap = await createImageBitmap(blob),
+      ratio = Math.round((bitmap.width / bitmap.height) * 10000) / 10000;
+    bitmap.close();
+    return ratio > 0 && Number.isFinite(ratio) ? ratio : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function resize(file: File) {
