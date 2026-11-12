@@ -1469,9 +1469,9 @@ body:has(.dynamic-photos) {
   letter-spacing: .08em;
 }
 .gallery-meta {
-  font-size: .67rem;
-  text-transform: uppercase;
-  letter-spacing: .13em;
+  font-size: .72rem;
+  text-transform: none;
+  letter-spacing: .08em;
   color: #c9b9a8 !important;
 }
 .dynamic-home section button:hover,
@@ -4294,7 +4294,7 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
   color: #fffbeb;
 }
 .dynamic-home.is-omni section > p { color: rgba(255, 251, 235, .78); font-weight: 300; }
-.dynamic-home.is-omni .gallery-meta { color: rgba(242, 235, 227, .8) !important; letter-spacing: .2em; }
+.dynamic-home.is-omni .gallery-meta { color: rgba(242, 235, 227, .8) !important; letter-spacing: .1em; }
 .dynamic-home.is-omni section button {
   background: #fffbeb;
   color: #000249;

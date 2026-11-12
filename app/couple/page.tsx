@@ -873,7 +873,7 @@ export default function CoupleGallery() {
           </>
         )}
         <p>{gallery.note}</p>
-        <p className="gallery-meta">{[gallery.weddingDate, gallery.location].filter(Boolean).join(" · ")}</p>
+        <p className="gallery-meta">{[titleCase(gallery.location || ""), gallery.weddingDate].filter(Boolean).join(" · ")}</p>
         <div>
           <button disabled={!photos.length} onClick={() => openView("photos")}>
             <Icon name="photo" /> <span>Photography<small>{photos.length} photos</small></span>
@@ -893,6 +893,9 @@ export default function CoupleGallery() {
   );
 }
 
+// "tel aviv" -> "Tel Aviv": capitalise each word, leave the rest as typed.
+const titleCase = (value: string) =>
+  value.trim().replace(/(^|[\s-])(\p{Ll})/gu, (_, gap: string, letter: string) => gap + letter.toUpperCase());
 function JustifiedPhotoGrid({
   photos,
   names,
