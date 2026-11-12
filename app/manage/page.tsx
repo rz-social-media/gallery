@@ -1,6 +1,6 @@
 "use client";
 import { createCRC32, createSHA256 } from "hash-wasm";
-import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 const API = "https://rz-gallery-media-api.galfadlon2.workers.dev",
   BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -15,6 +15,7 @@ type Media = {
   assetId?: string;
   posterUrl?: string;
   posterPosition?: string;
+  posterZoom?: number;
   ratio?: number;
   filename: string;
   sha256?: string;
@@ -51,6 +52,8 @@ type Gallery = {
   phoneCoverUrl?: string;
   computerCoverPosition?: string;
   phoneCoverPosition?: string;
+  computerCoverZoom?: number;
+  phoneCoverZoom?: number;
   shareImageUrl?: string;
   shareImageFor?: string;
   featuredVideoId?: string;
@@ -601,8 +604,8 @@ function Editor({
     [picked, setPicked] = useState<string[]>([]),
     [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null),
     [coverFor, setCoverFor] = useState<string | null>(null),
-    [coverDraft, setCoverDraft] = useState<{ url: string; position: string } | null>(null),
-    [galleryFraming, setGalleryFraming] = useState<{ field: "computerCoverUrl" | "phoneCoverUrl"; url: string; saveUrl?: string; position: string } | null>(null),
+    [coverDraft, setCoverDraft] = useState<{ url: string; position: string; zoom: number } | null>(null),
+    [galleryFraming, setGalleryFraming] = useState<{ field: "computerCoverUrl" | "phoneCoverUrl"; url: string; saveUrl?: string; position: string; zoom: number } | null>(null),
     [galleryCoverFor, setGalleryCoverFor] = useState<
       "computerCoverUrl" | "phoneCoverUrl" | null
     >(null),
@@ -977,9 +980,9 @@ function Editor({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }
-  function selectVideoCover(videoId: string, posterUrl?: string, posterPosition?: string) {
+  function selectVideoCover(videoId: string, posterUrl?: string, posterPosition?: string, posterZoom?: number) {
     const media = galleryRef.current.media.map((item) =>
-      item.id === videoId ? { ...item, posterUrl, posterPosition } : item,
+      item.id === videoId ? { ...item, posterUrl, posterPosition, posterZoom: posterZoom && posterZoom > 1 ? posterZoom : undefined } : item,
     );
     setCoverFor(null);
     setCoverDraft(null);
@@ -989,9 +992,15 @@ function Editor({
     field: "computerCoverUrl" | "phoneCoverUrl",
     coverUrl?: string,
     position?: string,
+    zoom?: number,
   ) {
-    const positionField = field === "phoneCoverUrl" ? "phoneCoverPosition" : "computerCoverPosition";
-    const updated = { ...galleryRef.current, [field]: coverUrl, [positionField]: position };
+    const phone = field === "phoneCoverUrl";
+    const updated = {
+      ...galleryRef.current,
+      [field]: coverUrl,
+      [phone ? "phoneCoverPosition" : "computerCoverPosition"]: position,
+      [phone ? "phoneCoverZoom" : "computerCoverZoom"]: zoom && zoom > 1 ? zoom : undefined,
+    };
     setGalleryFraming(null);
     galleryRef.current = updated;
     change(updated);
@@ -1013,12 +1022,19 @@ function Editor({
     gallery.media.find((item) => item.type === "photo" && item.url)?.url ||
     gallery.media.find((item) => item.type === "video" && item.posterUrl)?.posterUrl ||
     "";
-  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|1`;
+  // The preview is cropped like the cover the client sees for it.
+  const [sharePosition, shareZoom] =
+    shareCover === gallery.computerCoverUrl
+      ? [gallery.computerCoverPosition, gallery.computerCoverZoom]
+      : shareCover === gallery.phoneCoverUrl
+        ? [gallery.phoneCoverPosition, gallery.phoneCoverZoom]
+        : [undefined, undefined];
+  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|2`;
   useEffect(() => {
     if (!gallery.slug || !shareCover || gallery.shareImageFor === shareKey || uploading) return;
     const timer = window.setTimeout(async () => {
       try {
-        const image = await renderShareImage(shareCover, business),
+        const image = await renderShareImage(shareCover, business, sharePosition, shareZoom),
           key = await signed(image, "share-preview.jpg", "photo-web", gallery.slug, await fingerprint(image));
         const updated = { ...galleryRef.current, shareImageUrl: `${API}/media/${key}`, shareImageFor: shareKey };
         galleryRef.current = updated;
@@ -1619,7 +1635,7 @@ function Editor({
               >
                 <div className="film-poster">
                   {v.posterUrl ? (
-                    <img src={v.posterUrl} alt="" style={{ objectPosition: v.posterPosition }} />
+                    <img src={v.posterUrl} alt="" style={framed(v.posterPosition, v.posterZoom)} />
                   ) : v.playbackId ? (
                     <img
                       src={`https://image.mux.com/${v.playbackId}/thumbnail.webp?time=0&width=360&fit_mode=smartcrop`}
@@ -1675,7 +1691,7 @@ function Editor({
                   {v.posterUrl && (
                     <button
                       onClick={() => {
-                        setCoverDraft({ url: v.posterUrl!, position: v.posterPosition || "50% 50%" });
+                        setCoverDraft({ url: v.posterUrl!, position: v.posterPosition || "50% 50%", zoom: v.posterZoom || 1 });
                         setCoverFor(v.id);
                       }}
                     >
@@ -1812,11 +1828,12 @@ function Editor({
             ).map(([field, label]) => {
               const selected = gallery[field],
                 position = field === "phoneCoverUrl" ? gallery.phoneCoverPosition : gallery.computerCoverPosition,
+                zoom = field === "phoneCoverUrl" ? gallery.phoneCoverZoom : gallery.computerCoverZoom,
                 shown = selected || automaticCover;
               return (
                 <section key={field}>
-                  <div className={field === "phoneCoverUrl" ? "is-phone" : ""}>
-                    {shown && <img src={shown} alt="" style={{ objectPosition: position }} />}
+                  <div className={`gallery-cover-preview ${field === "phoneCoverUrl" ? "is-phone" : ""}`}>
+                    {shown && <img src={shown} alt="" style={framed(position, zoom)} />}
                     <span>{selected ? "Selected" : "Automatic default"}</span>
                   </div>
                   <h3>{label}</h3>
@@ -1825,7 +1842,7 @@ function Editor({
                       {selected ? "Change cover" : "Choose cover"}
                     </button>
                     {shown && (
-                      <button onClick={() => setGalleryFraming({ field, url: shown, saveUrl: selected, position: position || "50% 50%" })}>
+                      <button onClick={() => setGalleryFraming({ field, url: shown, saveUrl: selected, position: position || "50% 50%", zoom: zoom || 1 })}>
                         Adjust position
                       </button>
                     )}
@@ -1849,15 +1866,16 @@ function Editor({
               <CoverFramer
                 url={coverDraft.url}
                 position={coverDraft.position}
-                hint="Drag the photo to position it · The frame matches the film card your client sees"
-                onChange={(position) => setCoverDraft({ ...coverDraft, position })}
+                zoom={coverDraft.zoom}
+                hint="Drag to position · Scroll or use the slider to zoom · The frame matches the film card your client sees"
+                onChange={(next) => setCoverDraft({ ...coverDraft, ...next })}
               />
               <div className="cover-framing-actions">
                 <button onClick={() => setCoverDraft(null)}>Choose another photo</button>
-                <button onClick={() => setCoverDraft({ ...coverDraft, position: "50% 50%" })}>Center</button>
+                <button onClick={() => setCoverDraft({ ...coverDraft, position: "50% 50%", zoom: 1 })}>Reset</button>
                 <button
                   className="is-primary"
-                  onClick={() => selectVideoCover(coverFor, coverDraft.url, coverDraft.position)}
+                  onClick={() => selectVideoCover(coverFor, coverDraft.url, coverDraft.position, coverDraft.zoom)}
                 >
                   Save cover
                 </button>
@@ -1881,7 +1899,7 @@ function Editor({
                   .map((photo) => (
                     <button
                       key={photo.id}
-                      onClick={() => setCoverDraft({ url: photo.url!, position: "50% 50%" })}
+                      onClick={() => setCoverDraft({ url: photo.url!, position: "50% 50%", zoom: 1 })}
                     >
                       <img src={photo.url} alt={photo.alt} />
                     </button>
@@ -1912,9 +1930,10 @@ function Editor({
               <CoverFramer
                 url={galleryFraming.url}
                 position={galleryFraming.position}
+                zoom={galleryFraming.zoom}
                 aspect={galleryFraming.field === "phoneCoverUrl" ? 9 / 19.5 : 16 / 9}
-                hint={`Drag the photo to position it · The frame matches a ${galleryFraming.field === "phoneCoverUrl" ? "phone" : "computer"} screen`}
-                onChange={(position) => setGalleryFraming({ ...galleryFraming, position })}
+                hint={`Drag to position · Scroll or use the slider to zoom · The frame matches a ${galleryFraming.field === "phoneCoverUrl" ? "phone" : "computer"} screen`}
+                onChange={(next) => setGalleryFraming({ ...galleryFraming, ...next })}
               />
               <div className="cover-framing-actions">
                 <button
@@ -1925,10 +1944,10 @@ function Editor({
                 >
                   Choose another photo
                 </button>
-                <button onClick={() => setGalleryFraming({ ...galleryFraming, position: "50% 50%" })}>Center</button>
+                <button onClick={() => setGalleryFraming({ ...galleryFraming, position: "50% 50%", zoom: 1 })}>Reset</button>
                 <button
                   className="is-primary"
-                  onClick={() => selectGalleryCover(galleryFraming.field, galleryFraming.saveUrl, galleryFraming.position)}
+                  onClick={() => selectGalleryCover(galleryFraming.field, galleryFraming.saveUrl, galleryFraming.position, galleryFraming.zoom)}
                 >
                   Save cover
                 </button>
@@ -1956,7 +1975,7 @@ function Editor({
                   <button
                     key={candidate.id}
                     onClick={() => {
-                      setGalleryFraming({ field: galleryCoverFor, url: candidate.url!, saveUrl: candidate.url, position: "50% 50%" });
+                      setGalleryFraming({ field: galleryCoverFor, url: candidate.url!, saveUrl: candidate.url, position: "50% 50%", zoom: 1 });
                       setGalleryCoverFor(null);
                     }}
                   >
@@ -2009,27 +2028,72 @@ function Editor({
   );
 }
 
-// Drag the photo to choose what stays in frame. `aspect` is the shape the
-// client sees: film cards are 1.626:1, gallery covers fill a computer or phone screen.
-function CoverFramer({ url, position, aspect = 1.626, hint, onChange }: { url: string; position: string; aspect?: number; hint: string; onChange: (position: string) => void }) {
+// Same crop everywhere a framed cover is shown: object-position picks the spot,
+// the zoom scales around that same spot (the parent clips).
+function framed(position?: string, zoom?: number): CSSProperties | undefined {
+  if (!position && !(zoom && zoom > 1)) return undefined;
+  return zoom && zoom > 1
+    ? { objectPosition: position || "50% 50%", transform: `scale(${zoom})`, transformOrigin: position || "50% 50%" }
+    : { objectPosition: position };
+}
+
+const MAX_ZOOM = 3;
+
+// Drag the photo to choose what stays in frame; scroll, pinch or the slider to
+// zoom. `aspect` is the shape the client sees: film cards are 1.626:1, gallery
+// covers fill a computer or phone screen.
+function CoverFramer({
+  url,
+  position,
+  zoom,
+  aspect = 1.626,
+  hint,
+  onChange,
+}: {
+  url: string;
+  position: string;
+  zoom: number;
+  aspect?: number;
+  hint: string;
+  onChange: (frame: { position: string; zoom: number }) => void;
+}) {
   const frame = useRef<HTMLDivElement | null>(null),
     [natural, setNatural] = useState<{ width: number; height: number } | null>(null),
     [dragging, setDragging] = useState(false),
-    [x, y] = position.split(" ").map((value) => parseFloat(value));
+    [x, y] = position.split(" ").map((value) => parseFloat(value)),
+    latest = useRef({ position, zoom, onChange });
+  latest.current = { position, zoom, onChange };
+  const setZoom = (value: number) =>
+    latest.current.onChange({
+      position: latest.current.position,
+      zoom: Math.round(Math.min(MAX_ZOOM, Math.max(1, value)) * 100) / 100,
+    });
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    // Native listener: React's wheel handler is passive and can't stop the page scrolling.
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setZoom(latest.current.zoom * Math.exp(-event.deltaY * (event.ctrlKey ? 0.01 : 0.002)));
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, []);
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (!frame.current || !natural) return;
     event.preventDefault();
     const box = frame.current.getBoundingClientRect(),
-      scale = Math.max(box.width / natural.width, box.height / natural.height),
+      scale = Math.max(box.width / natural.width, box.height / natural.height) * zoom,
       spareX = natural.width * scale - box.width,
       spareY = natural.height * scale - box.height,
       startX = event.clientX,
       startY = event.clientY;
     const clamp = (value: number) => Math.round(Math.min(100, Math.max(0, value)) * 10) / 10;
     const onMove = (move: PointerEvent) =>
-      onChange(
-        `${spareX > 1 ? clamp(x - ((move.clientX - startX) / spareX) * 100) : 50}% ${spareY > 1 ? clamp(y - ((move.clientY - startY) / spareY) * 100) : 50}%`,
-      );
+      onChange({
+        position: `${spareX > 1 ? clamp(x - ((move.clientX - startX) / spareX) * 100) : 50}% ${spareY > 1 ? clamp(y - ((move.clientY - startY) / spareY) * 100) : 50}%`,
+        zoom,
+      });
     const onUp = () => {
       setDragging(false);
       window.removeEventListener("pointermove", onMove);
@@ -2051,10 +2115,24 @@ function CoverFramer({ url, position, aspect = 1.626, hint, onChange }: { url: s
           src={url}
           alt=""
           draggable={false}
-          style={{ objectPosition: position }}
+          style={framed(position, zoom) || { objectPosition: position }}
           onLoad={(event) => setNatural({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
         />
         <span className="cover-framer-grid" aria-hidden="true" />
+      </div>
+      <div className="cover-zoom">
+        <button type="button" aria-label="Zoom out" onClick={() => setZoom(zoom - 0.1)}>−</button>
+        <input
+          type="range"
+          min={1}
+          max={MAX_ZOOM}
+          step={0.01}
+          value={zoom}
+          aria-label="Zoom"
+          onChange={(event) => setZoom(Number(event.currentTarget.value))}
+        />
+        <button type="button" aria-label="Zoom in" onClick={() => setZoom(zoom + 0.1)}>+</button>
+        <output>{Math.round(zoom * 100)}%</output>
       </div>
       <p className="cover-framer-hint">{hint}</p>
     </>
@@ -2062,8 +2140,9 @@ function CoverFramer({ url, position, aspect = 1.626, hint, onChange }: { url: s
 }
 
 // Cover + brand mark for link previews. RZ: the ivory seal used on the site;
-// OMNI: the ivory symbol. Top-left, like the gallery header.
-async function renderShareImage(coverUrl: string, business: boolean) {
+// OMNI: the ivory symbol. Top-left, like the gallery header. Always a 4:3
+// landscape: WhatsApp crops tall images and the corner logo got cut off.
+async function renderShareImage(coverUrl: string, business: boolean, position?: string, zoom?: number) {
   const load = (src: string) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
@@ -2073,14 +2152,18 @@ async function renderShareImage(coverUrl: string, business: boolean) {
       image.src = src;
     });
   const cover = await load(coverUrl),
-    scale = Math.min(1, 1600 / Math.max(cover.naturalWidth, cover.naturalHeight)),
     canvas = document.createElement("canvas");
-  canvas.width = Math.round(cover.naturalWidth * scale);
-  canvas.height = Math.round(cover.naturalHeight * scale);
+  canvas.width = 1200;
+  canvas.height = 900;
+  // Same crop as object-fit: cover + object-position + the framer's zoom.
+  const [x, y] = (position || "50% 50%").split(" ").map((value) => parseFloat(value) / 100),
+    scale = Math.max(canvas.width / cover.naturalWidth, canvas.height / cover.naturalHeight) * Math.max(1, zoom || 1),
+    width = cover.naturalWidth * scale,
+    height = cover.naturalHeight * scale;
   const context = canvas.getContext("2d")!,
     unit = Math.min(canvas.width, canvas.height),
-    margin = unit * 0.06;
-  context.drawImage(cover, 0, 0, canvas.width, canvas.height);
+    margin = unit * 0.07;
+  context.drawImage(cover, -x * (width - canvas.width), -y * (height - canvas.height), width, height);
   const glow = context.createRadialGradient(0, 0, 0, 0, 0, unit * 0.55);
   glow.addColorStop(0, "rgba(0, 0, 0, .38)");
   glow.addColorStop(1, "rgba(0, 0, 0, 0)");

@@ -1346,7 +1346,8 @@ body:has(.dynamic-photos) {
   background-image: var(--gallery-cover-computer);
   background-size: cover;
   background-position: var(--gallery-cover-computer-position, center);
-  transform: scale(1.01);
+  transform: scale(calc(1.01 * var(--gallery-cover-computer-zoom, 1)));
+  transform-origin: var(--gallery-cover-computer-position, center);
 }
 .dynamic-shade {
   background:
@@ -1941,6 +1942,10 @@ body:has(.dynamic-photos) {
   .dynamic-film-cover {
     background-image: var(--gallery-cover-phone);
     background-position: var(--gallery-cover-phone-position, center);
+  }
+  .dynamic-cover {
+    transform: scale(calc(1.01 * var(--gallery-cover-phone-zoom, 1)));
+    transform-origin: var(--gallery-cover-phone-position, center);
   }
   .dynamic-photo-grid {
     padding-left: 0.5rem;
@@ -4498,3 +4503,55 @@ main.is-omni :is(h1, h2, h3, p, small, strong, span, button, a, em, i) {
 .gallery-cover-buttons { display: flex; flex-wrap: wrap; gap: .6rem; }
 .cover-framer.is-tall { width: min(300px, 70%); margin-left: auto; margin-right: auto; }
 .cover-picker > section.cover-framing { max-height: calc(100svh - 2rem); overflow-y: auto; }
+
+/* ===== Manager: covers match what the client sees ===== */
+/* Absolute images: a grid/auto-height img sized itself to the photo and showed its top. */
+.film-poster { position: relative; aspect-ratio: 1.626 / 1; }
+.film-poster img { position: absolute; inset: 0; }
+.gallery-cover-cards > section { display: flex; flex-direction: column; align-items: flex-start; }
+.gallery-cover-cards > section > div.gallery-cover-preview { align-self: stretch; height: auto; aspect-ratio: 16 / 9; }
+.gallery-cover-cards > section > div.gallery-cover-preview.is-phone { align-self: flex-start; width: min(42%, 150px); aspect-ratio: 9 / 19.5; }
+.gallery-cover-cards > section > div.gallery-cover-preview img { position: absolute; inset: 0; }
+.gallery-cover-cards > section > div.gallery-cover-buttons {
+  height: auto;
+  overflow: visible;
+  background: none;
+  border-radius: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.gm .gallery-cover-cards .gallery-cover-buttons button {
+  width: auto;
+  height: auto;
+  padding: .55rem 1.05rem;
+  font-size: .78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.gm .gallery-cover-cards .gallery-cover-buttons button + button { background: transparent; }
+
+/* Zoom control under the framer */
+.cover-zoom {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  max-width: 420px;
+  margin: .9rem auto 0;
+  padding: 0 clamp(1.3rem, 3vw, 2.4rem);
+}
+.gm .cover-picker .cover-zoom button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #d8cec1;
+  border-radius: 50%;
+  background: transparent;
+  color: #4b3f35;
+  font-size: 1rem;
+  line-height: 1;
+}
+.gm .cover-picker .cover-zoom button:hover { border-color: rgb(75, 11, 16); color: rgb(75, 11, 16); }
+.cover-zoom input { flex: 1; min-width: 0; accent-color: rgb(75, 11, 16); }
+.cover-zoom output { width: 3.2em; color: #82766a; font-size: .72rem; font-variant-numeric: tabular-nums; text-align: right; }

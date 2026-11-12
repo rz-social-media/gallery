@@ -22,6 +22,7 @@ type Media = {
   playbackId: string | null;
   posterUrl?: string | null;
   posterPosition?: string;
+  posterZoom?: number;
   ratio?: number;
   title: string;
   alt: string;
@@ -43,6 +44,8 @@ type Gallery = {
   phoneCoverUrl?: string;
   computerCoverPosition?: string;
   phoneCoverPosition?: string;
+  computerCoverZoom?: number;
+  phoneCoverZoom?: number;
   featuredVideoId?: string;
   media: Media[];
 };
@@ -217,6 +220,10 @@ export default function CoupleGallery() {
       (gallery.computerCoverUrl || !gallery.phoneCoverUrl ? gallery.computerCoverPosition : undefined) || "center",
     "--gallery-cover-phone-position":
       (gallery.phoneCoverUrl || !gallery.computerCoverUrl ? gallery.phoneCoverPosition : undefined) || "center",
+    "--gallery-cover-computer-zoom":
+      (gallery.computerCoverUrl || !gallery.phoneCoverUrl ? gallery.computerCoverZoom : undefined) || 1,
+    "--gallery-cover-phone-zoom":
+      (gallery.phoneCoverUrl || !gallery.computerCoverUrl ? gallery.phoneCoverZoom : undefined) || 1,
   } as CSSProperties;
   const sharedIdsSuffix = sharedPhotoIds.length
     ? `&ids=${encodeURIComponent(sharedPhotoIds.join(","))}`
@@ -799,7 +806,17 @@ export default function CoupleGallery() {
                       film.posterUrl ||
                       `https://image.mux.com/${film.playbackId}/thumbnail.webp?time=0&width=900&fit_mode=smartcrop`
                     }
-                    style={film.posterUrl && film.posterPosition ? { objectPosition: film.posterPosition } : undefined}
+                    style={
+                      film.posterUrl && (film.posterPosition || film.posterZoom)
+                        ? {
+                            objectPosition: film.posterPosition,
+                            // Zoom around the chosen spot, exactly as the manager's framer shows it.
+                            ...(film.posterZoom && film.posterZoom > 1
+                              ? { transform: `scale(${film.posterZoom})`, transformOrigin: film.posterPosition || "50% 50%" }
+                              : {}),
+                          }
+                        : undefined
+                    }
                     alt=""
                   />
                   <span className="rzf-card-shade" />
