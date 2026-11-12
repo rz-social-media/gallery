@@ -1029,7 +1029,7 @@ function Editor({
       : shareCover === gallery.phoneCoverUrl
         ? [gallery.phoneCoverPosition, gallery.phoneCoverZoom]
         : [undefined, undefined];
-  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|2`;
+  const shareKey = `${shareCover}|${business ? "omni" : "rz"}|${sharePosition || "50% 50%"}|${shareZoom || 1}|3`;
   useEffect(() => {
     if (!gallery.slug || !shareCover || gallery.shareImageFor === shareKey || uploading) return;
     const timer = window.setTimeout(async () => {
@@ -2177,17 +2177,18 @@ async function renderShareImage(coverUrl: string, business: boolean, position?: 
     const radius = unit * 0.075,
       x = margin + radius,
       y = margin + radius;
-    await document.fonts.load(`400 ${Math.round(radius * 0.72)}px "Playfair Display"`).catch(() => undefined);
+    // The RZ mark from the site icon: red seal, thin cream ring, cream bold serif.
+    await document.fonts.load(`700 ${Math.round(radius * 0.74)}px "Playfair Display"`).catch(() => undefined);
     context.beginPath();
-    context.arc(x, y, radius + unit * 0.012, 0, Math.PI * 2);
-    context.fillStyle = "rgba(255, 255, 255, .3)";
+    context.arc(x, y, radius + unit * 0.008, 0, Math.PI * 2);
+    context.fillStyle = "#fffaf5";
     context.fill();
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = "#fffdf8";
+    context.fillStyle = "#a91f24";
     context.fill();
-    context.fillStyle = "#2a211b";
-    context.font = `400 ${Math.round(radius * 0.72)}px "Playfair Display", Georgia, serif`;
+    context.fillStyle = "#fffaf5";
+    context.font = `700 ${Math.round(radius * 0.74)}px "Playfair Display", Georgia, serif`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText("RZ", x, y + radius * 0.04);
